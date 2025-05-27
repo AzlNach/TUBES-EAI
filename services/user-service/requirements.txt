@@ -1,0 +1,9 @@
+Flask==2.3.3
+graphene==2.1.9
+Flask-SQLAlchemy==3.0.5
+PyMySQL==1.1.0
+cryptography==41.0.4
+PyJWT==2.8.0
+Werkzeug==2.3.7
+graphql-core==2.3.2
+graphql-relay==2.0.1

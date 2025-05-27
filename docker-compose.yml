@@ -1,0 +1,187 @@
+version: '3.8'
+
+services:
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    ports:
+      - "3012:3012"
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@user-db/user_db
+    depends_on:
+      - user-db
+    restart: unless-stopped
+
+  cinema-service:
+    build:
+      context: ./services/cinema-service
+      dockerfile: Dockerfile
+    ports:
+      - "3008:3008"
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@cinema-db/cinema_db
+    depends_on:
+      - cinema-db
+    restart: unless-stopped
+
+  movie-service:
+    build:
+      context: ./services/movie-service
+      dockerfile: Dockerfile
+    ports:
+      - "3010:3010"
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@movie-db/movie_db
+    depends_on:
+      - movie-db
+    restart: unless-stopped
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+      dockerfile: Dockerfile
+    ports:
+      - "3007:3007"
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@booking-db/booking_db
+    depends_on:
+      - booking-db
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    ports:
+      - "3011:3011"
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@payment-db/payment_db
+    depends_on:
+      - payment-db
+    restart: unless-stopped
+
+  coupon-service:
+    build:
+      context: ./services/coupon-service
+      dockerfile: Dockerfile
+    ports:
+      - "3009:3009"
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@coupon-db/coupon_db
+    depends_on:
+      - coupon-db
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    depends_on:
+      - user-service
+      - cinema-service
+      - movie-service
+      - booking-service
+      - payment-service
+      - coupon-service
+    restart: unless-stopped
+
+  # User Service Database
+  user-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: user_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3301:3306"
+    volumes:
+      - user_db_data:/var/lib/mysql
+      - ./services/user-service/user.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Cinema Service Database
+  cinema-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: cinema_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3302:3306"
+    volumes:
+      - cinema_db_data:/var/lib/mysql
+      - ./services/cinema-service/cinema.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Movie Service Database
+  movie-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: movie_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3303:3306"
+    volumes:
+      - movie_db_data:/var/lib/mysql
+      - ./services/movie-service/movie.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Booking Service Database
+  booking-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: booking_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3304:3306"
+    volumes:
+      - booking_db_data:/var/lib/mysql
+      - ./services/booking-service/booking.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Payment Service Database
+  payment-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: payment_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3305:3306"
+    volumes:
+      - payment_db_data:/var/lib/mysql
+      - ./services/payment-service/payment.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Coupon Service Database - Port diubah dari 3306 ke 3307
+  coupon-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: coupon_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306"
+    volumes:
+      - coupon_db_data:/var/lib/mysql
+      - ./services/coupon-service/coupon.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  user_db_data:
+  cinema_db_data:
+  movie_db_data:
+  booking_db_data:
+  payment_db_data:
+  coupon_db_data:

@@ -1,0 +1,10 @@
+CREATE DATABASE IF NOT EXISTS coupon_db;
+
+USE coupon_db;
+
+CREATE TABLE IF NOT EXISTS coupons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    discount DECIMAL(5, 2) NOT NULL,
+    expiration_date DATETIME NOT NULL
+);

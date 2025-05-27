@@ -1,0 +1,9 @@
+CREATE DATABASE IF NOT EXISTS cinema_db;
+
+USE cinema_db;
+
+CREATE TABLE IF NOT EXISTS cinemas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    location VARCHAR(255) NOT NULL
+);
