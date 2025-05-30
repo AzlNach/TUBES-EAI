@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import jwt
 from flask import request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+from models import User
 
 SECRET_KEY = "your_secret_key"  # Replace with your actual secret key
 

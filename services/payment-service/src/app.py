@@ -15,6 +15,8 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+# ...existing code...
+
 @app.route('/graphql', methods=['POST', 'GET'])
 def graphql_endpoint():
     if request.method == 'POST':
@@ -27,28 +29,19 @@ def graphql_endpoint():
             'errors': [str(error) for error in result.errors] if result.errors else None
         })
     elif request.method == 'GET':
-        # Return GraphiQL interface
+        # Return GraphiQL interface with compatible React versions
         return '''
         <!DOCTYPE html>
         <html>
         <head>
-            <title>GraphiQL</title>
-            <link href="https://unpkg.com/graphiql/graphiql.min.css" rel="stylesheet" />
+            <title>Payment Service - GraphiQL</title>
+            <link href="https://unpkg.com/graphiql@1.5.0/graphiql.min.css" rel="stylesheet" />
         </head>
         <body style="margin: 0;">
             <div id="graphiql" style="height: 100vh;"></div>
-            <script
-                crossorigin
-                src="https://unpkg.com/react@17/umd/react.production.min.js"
-            ></script>
-            <script
-                crossorigin
-                src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"
-            ></script>
-            <script
-                crossorigin
-                src="https://unpkg.com/graphiql/graphiql.min.js"
-            ></script>
+            <script src="https://unpkg.com/react@16.14.0/umd/react.production.min.js"></script>
+            <script src="https://unpkg.com/react-dom@16.14.0/umd/react-dom.production.min.js"></script>
+            <script src="https://unpkg.com/graphiql@1.5.0/graphiql.min.js"></script>
             <script>
                 ReactDOM.render(
                     React.createElement(GraphiQL, {
@@ -60,6 +53,7 @@ def graphql_endpoint():
         </body>
         </html>
         '''
+# ...existing code...
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=3011)

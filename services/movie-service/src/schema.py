@@ -1,5 +1,6 @@
 from graphene import ObjectType, String, Int, List, Field, Mutation, Schema
 from models import Movie, db
+from datetime import datetime
 
 class MovieType(ObjectType):
     id = Int()
@@ -7,6 +8,7 @@ class MovieType(ObjectType):
     genre = String()
     duration = Int()
     description = String()
+    release_date = String()
 
 class Query(ObjectType):
     movies = List(MovieType)
@@ -24,11 +26,22 @@ class CreateMovie(Mutation):
         genre = String(required=True)
         duration = Int(required=True)
         description = String()
+        release_date = String()
 
     movie = Field(MovieType)
 
-    def mutate(self, info, title, genre, duration, description=None):
-        movie = Movie(title=title, genre=genre, duration=duration, description=description)
+    def mutate(self, info, title, genre, duration, description=None, release_date=None):
+        movie = Movie(
+            title=title, 
+            genre=genre, 
+            duration=duration, 
+            description=description
+        )
+        if release_date:
+            try:
+                movie.release_date = datetime.strptime(release_date, '%Y-%m-%d').date()
+            except ValueError:
+                raise Exception("Invalid date format. Use YYYY-MM-DD")
         movie.save()
         return CreateMovie(movie=movie)
 
@@ -39,10 +52,11 @@ class UpdateMovie(Mutation):
         genre = String()
         duration = Int()
         description = String()
+        release_date = String()
 
     movie = Field(MovieType)
 
-    def mutate(self, info, id, title=None, genre=None, duration=None, description=None):
+    def mutate(self, info, id, title=None, genre=None, duration=None, description=None, release_date=None):
         movie = Movie.query.get(id)
         if movie:
             if title:
@@ -53,6 +67,11 @@ class UpdateMovie(Mutation):
                 movie.duration = duration
             if description is not None:
                 movie.description = description
+            if release_date:
+                try:
+                    movie.release_date = datetime.strptime(release_date, '%Y-%m-%d').date()
+                except ValueError:
+                    raise Exception("Invalid date format. Use YYYY-MM-DD")
             movie.save()
         return UpdateMovie(movie=movie)
 

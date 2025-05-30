@@ -1,12 +1,13 @@
-from graphene import ObjectType, String, Float, Int, List, Field, Mutation, Schema
+from graphene import ObjectType, String, Float, Int, List, Field, Mutation, Schema, Boolean
 from models import Coupon, db
 from datetime import datetime
 
 class CouponType(ObjectType):
     id = Int()
     code = String()
-    discount = Float()
-    expiration_date = String()
+    discount_percentage = Float()
+    valid_until = String()
+    is_active = Boolean()
 
 class Query(ObjectType):
     coupons = List(CouponType)
@@ -21,15 +22,21 @@ class Query(ObjectType):
 class CreateCoupon(Mutation):
     class Arguments:
         code = String(required=True)
-        discount = Float(required=True)
-        expiration_date = String(required=True)
+        discount_percentage = Float(required=True)
+        valid_until = String(required=True)
+        is_active = Boolean()
 
     coupon = Field(CouponType)
 
-    def mutate(self, info, code, discount, expiration_date):
+    def mutate(self, info, code, discount_percentage, valid_until, is_active=True):
         try:
-            exp_date = datetime.strptime(expiration_date, '%Y-%m-%d')
-            new_coupon = Coupon(code=code, discount=discount, expiration_date=exp_date)
+            exp_date = datetime.strptime(valid_until, '%Y-%m-%d')
+            new_coupon = Coupon(
+                code=code, 
+                discount_percentage=discount_percentage, 
+                valid_until=exp_date,
+                is_active=is_active
+            )
             new_coupon.save()
             return CreateCoupon(coupon=new_coupon)
         except ValueError:
@@ -39,23 +46,26 @@ class UpdateCoupon(Mutation):
     class Arguments:
         id = Int(required=True)
         code = String()
-        discount = Float()
-        expiration_date = String()
+        discount_percentage = Float()
+        valid_until = String()
+        is_active = Boolean()
 
     coupon = Field(CouponType)
 
-    def mutate(self, info, id, code=None, discount=None, expiration_date=None):
+    def mutate(self, info, id, code=None, discount_percentage=None, valid_until=None, is_active=None):
         coupon = Coupon.query.get(id)
         if coupon:
             if code:
                 coupon.code = code
-            if discount:
-                coupon.discount = discount
-            if expiration_date:
+            if discount_percentage:
+                coupon.discount_percentage = discount_percentage
+            if valid_until:
                 try:
-                    coupon.expiration_date = datetime.strptime(expiration_date, '%Y-%m-%d')
+                    coupon.valid_until = datetime.strptime(valid_until, '%Y-%m-%d')
                 except ValueError:
                     raise Exception("Invalid date format. Use YYYY-MM-DD")
+            if is_active is not None:
+                coupon.is_active = is_active
             coupon.save()
             return UpdateCoupon(coupon=coupon)
         return UpdateCoupon(coupon=None)
@@ -79,3 +89,14 @@ class Mutation(ObjectType):
     delete_coupon = DeleteCoupon.Field()
 
 schema = Schema(query=Query, mutation=Mutation)
+
+mutation_query = '''
+mutation($code: String!, $discount_percentage: Float!, $valid_until: String!, $is_active: Boolean) {
+    createCoupon(code: $code, discount_percentage: $discount_percentage, valid_until: $valid_until, is_active: $is_active) {
+        coupon {
+            id
+            # ... other fields
+        }
+    }
+}
+'''

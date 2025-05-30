@@ -11,6 +11,9 @@ class Booking(db.Model):
     movie_id = db.Column(db.Integer, nullable=False)
     cinema_id = db.Column(db.Integer, nullable=False)
     showtime = db.Column(db.String(50), nullable=False)
+    seats = db.Column(db.Text, nullable=True)  # Added missing column
+    total_price = db.Column(db.Float, nullable=True)  # Added missing column
+    status = db.Column(db.String(50), default='PENDING')  # Added missing column
     booking_date = db.Column(db.DateTime, default=datetime.utcnow)
 
     def save(self):
@@ -22,4 +25,4 @@ class Booking(db.Model):
         db.session.commit()
 
     def __repr__(self):
-        return f"<Booking(id={self.id}, user_id={self.user_id}, movie_id={self.movie_id})>"
+        return f"<Booking(id={self.id}, user_id={self.user_id}, movie_id={self.movie_id}, status='{self.status}')>"

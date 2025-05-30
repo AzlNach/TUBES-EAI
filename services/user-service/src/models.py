@@ -11,6 +11,7 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     hashed_password = db.Column(db.String(128), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='USER')  # Added missing column
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -33,4 +34,4 @@ class User(db.Model):
         db.session.commit()
 
     def __repr__(self):
-        return f"<User(id={self.id}, username={self.username}, email={self.email})>"
+        return f"<User(id={self.id}, username={self.username}, email={self.email}, role={self.role})>"

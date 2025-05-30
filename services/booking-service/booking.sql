@@ -8,5 +8,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     movie_id INT NOT NULL,
     cinema_id INT NOT NULL,
     showtime VARCHAR(50) NOT NULL,
+    seats TEXT,
+    total_price DECIMAL(10, 2),
+    status VARCHAR(50) DEFAULT 'PENDING',
     booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -7,5 +7,6 @@ CREATE TABLE IF NOT EXISTS movies (
     title VARCHAR(255) NOT NULL,
     genre VARCHAR(100) NOT NULL,
     duration INT NOT NULL,
-    description TEXT
+    description TEXT,
+    release_date DATE
 );

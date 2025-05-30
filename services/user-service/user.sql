@@ -7,12 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     hashed_password VARCHAR(128) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'USER', -- Comma missing here
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-
--- Insert sample data
-INSERT INTO users (username, email, hashed_password) VALUES 
-('admin', 'admin@cinema.com', 'pbkdf2:sha256:260000$abc123$hash_here'),
-('john_doe', 'john@email.com', 'pbkdf2:sha256:260000$def456$hash_here')
-ON DUPLICATE KEY UPDATE username=username;

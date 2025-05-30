@@ -5,6 +5,7 @@ class CinemaType(ObjectType):
     id = Int()
     name = String()
     location = String()
+    capacity = Int()
 
 class Query(ObjectType):
     cinemas = List(CinemaType)
@@ -20,11 +21,12 @@ class CreateCinema(Mutation):
     class Arguments:
         name = String(required=True)
         location = String(required=True)
+        capacity = Int()
 
     cinema = Field(CinemaType)
 
-    def mutate(self, info, name, location):
-        new_cinema = Cinema(name=name, location=location)
+    def mutate(self, info, name, location, capacity=100):
+        new_cinema = Cinema(name=name, location=location, capacity=capacity)
         new_cinema.save()
         return CreateCinema(cinema=new_cinema)
 
@@ -33,16 +35,19 @@ class UpdateCinema(Mutation):
         id = Int(required=True)
         name = String()
         location = String()
+        capacity = Int()
 
     cinema = Field(CinemaType)
 
-    def mutate(self, info, id, name=None, location=None):
+    def mutate(self, info, id, name=None, location=None, capacity=None):
         cinema = Cinema.query.get(id)
         if cinema:
             if name:
                 cinema.name = name
             if location:
                 cinema.location = location
+            if capacity:
+                cinema.capacity = capacity
             cinema.save()
         return UpdateCinema(cinema=cinema)
 

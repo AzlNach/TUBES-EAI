@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ .
 
-# Expose port 3012 instead of 5000
+# Expose port 3012
 EXPOSE 3012
 
 # Run the application

@@ -8,6 +8,7 @@ class Cinema(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     location = db.Column(db.String(255), nullable=False)
+    capacity = db.Column(db.Integer, nullable=False, default=100)  # Added missing column
 
     def save(self):
         db.session.add(self)
@@ -18,4 +19,4 @@ class Cinema(db.Model):
         db.session.commit()
 
     def __repr__(self):
-        return f"<Cinema(id={self.id}, name='{self.name}', location='{self.location}')>"
+        return f"<Cinema(id={self.id}, name='{self.name}', location='{self.location}', capacity={self.capacity})>"
