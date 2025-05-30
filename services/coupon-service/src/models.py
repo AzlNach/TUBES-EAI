@@ -8,9 +8,10 @@ class Coupon(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     code = db.Column(db.String(50), unique=True, nullable=False)
-    discount_percentage = db.Column(db.Float, nullable=False)  # Changed from discount to match SQL
-    valid_until = db.Column(db.DateTime, nullable=False)  # Changed from expiration_date to match SQL
-    is_active = db.Column(db.Boolean, default=True)  # Missing column
+    name = db.Column(db.String(100), nullable=False)  # New column
+    discount_percentage = db.Column(db.Float, nullable=False)
+    valid_until = db.Column(db.DateTime, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
 
     def save(self):
         db.session.add(self)
@@ -21,4 +22,4 @@ class Coupon(db.Model):
         db.session.commit()
 
     def __repr__(self):
-        return f"<Coupon(id={self.id}, code='{self.code}', discount_percentage={self.discount_percentage}, valid_until='{self.valid_until}')>"
+        return f"<Coupon(id={self.id}, code='{self.code}', name='{self.name}', discount_percentage={self.discount_percentage}, valid_until='{self.valid_until}')>"

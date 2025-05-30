@@ -5,6 +5,7 @@ from datetime import datetime
 class CouponType(ObjectType):
     id = Int()
     code = String()
+    name = String()  # New field
     discount_percentage = Float()
     valid_until = String()
     is_active = Boolean()
@@ -22,17 +23,19 @@ class Query(ObjectType):
 class CreateCoupon(Mutation):
     class Arguments:
         code = String(required=True)
+        name = String(required=True)  # New argument
         discount_percentage = Float(required=True)
         valid_until = String(required=True)
         is_active = Boolean()
 
     coupon = Field(CouponType)
 
-    def mutate(self, info, code, discount_percentage, valid_until, is_active=True):
+    def mutate(self, info, code, name, discount_percentage, valid_until, is_active=True):
         try:
             exp_date = datetime.strptime(valid_until, '%Y-%m-%d')
             new_coupon = Coupon(
-                code=code, 
+                code=code,
+                name=name,  # Add name
                 discount_percentage=discount_percentage, 
                 valid_until=exp_date,
                 is_active=is_active
@@ -46,17 +49,20 @@ class UpdateCoupon(Mutation):
     class Arguments:
         id = Int(required=True)
         code = String()
+        name = String()  # New argument
         discount_percentage = Float()
         valid_until = String()
         is_active = Boolean()
 
     coupon = Field(CouponType)
 
-    def mutate(self, info, id, code=None, discount_percentage=None, valid_until=None, is_active=None):
+    def mutate(self, info, id, code=None, name=None, discount_percentage=None, valid_until=None, is_active=None):
         coupon = Coupon.query.get(id)
         if coupon:
             if code:
                 coupon.code = code
+            if name:
+                coupon.name = name  # Handle name updates
             if discount_percentage:
                 coupon.discount_percentage = discount_percentage
             if valid_until:
@@ -90,12 +96,32 @@ class Mutation(ObjectType):
 
 schema = Schema(query=Query, mutation=Mutation)
 
+# Example mutation queries for reference
 mutation_query = '''
-mutation($code: String!, $discount_percentage: Float!, $valid_until: String!, $is_active: Boolean) {
-    createCoupon(code: $code, discount_percentage: $discount_percentage, valid_until: $valid_until, is_active: $is_active) {
+mutation($code: String!, $name: String!, $discount_percentage: Float!, $valid_until: String!, $is_active: Boolean) {
+    createCoupon(code: $code, name: $name, discount_percentage: $discount_percentage, valid_until: $valid_until, is_active: $is_active) {
         coupon {
             id
-            # ... other fields
+            code
+            name
+            discount_percentage
+            valid_until
+            is_active
+        }
+    }
+}
+'''
+
+update_mutation_query = '''
+mutation($id: Int!, $code: String, $name: String, $discount_percentage: Float, $valid_until: String, $is_active: Boolean) {
+    updateCoupon(id: $id, code: $code, name: $name, discount_percentage: $discount_percentage, valid_until: $valid_until, is_active: $is_active) {
+        coupon {
+            id
+            code
+            name
+            discount_percentage
+            valid_until
+            is_active
         }
     }
 }
