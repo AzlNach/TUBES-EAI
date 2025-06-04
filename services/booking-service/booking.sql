@@ -1,5 +1,3 @@
-CREATE DATABASE IF NOT EXISTS booking_db;
-
 USE booking_db;
 
 CREATE TABLE IF NOT EXISTS bookings (

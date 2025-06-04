@@ -1,5 +1,3 @@
-CREATE DATABASE IF NOT EXISTS movie_db;
-
 USE movie_db;
 
 CREATE TABLE IF NOT EXISTS movies (

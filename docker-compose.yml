@@ -16,30 +16,55 @@ services:
       - payment-service
       - coupon-service
 
+  # phpMyAdmin untuk akses database
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: mysql-server
+      PMA_USER: user
+      PMA_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "8080:80"
+    networks:
+      - cinema-network
+    depends_on:
+      - mysql-server
+
+  # Single MySQL Server
+  mysql-server:
+    image: mysql:8.0
+    container_name: mysql-server
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - ./database/init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql
+      - ./services/user-service/user.sql:/docker-entrypoint-initdb.d/02-user.sql
+      - ./services/movie-service/movie.sql:/docker-entrypoint-initdb.d/03-movie.sql
+      - ./services/cinema-service/cinema.sql:/docker-entrypoint-initdb.d/04-cinema.sql
+      - ./services/booking-service/booking.sql:/docker-entrypoint-initdb.d/05-booking.sql
+      - ./services/payment-service/payment.sql:/docker-entrypoint-initdb.d/06-payment.sql
+      - ./services/coupon-service/coupon.sql:/docker-entrypoint-initdb.d/07-coupon.sql
+      - mysql-data:/var/lib/mysql
+    networks:
+      - cinema-network
+
   # User Service
   user-service:
     build: ./services/user-service
     ports:
       - "3012:3012"
     environment:
-      - DATABASE_URL=mysql+pymysql://user:password@user-db/user_db
+      - DATABASE_URL=mysql+pymysql://user:password@mysql-server/user_db
     networks:
       - cinema-network
     depends_on:
-      - user-db
-
-  user-db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: user_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    volumes:
-      - ./services/user-service/user.sql:/docker-entrypoint-initdb.d/init.sql
-      - user-db-data:/var/lib/mysql
-    networks:
-      - cinema-network
+      - mysql-server
 
   # Movie Service
   movie-service:
@@ -47,24 +72,11 @@ services:
     ports:
       - "3010:3010"
     environment:
-      - DATABASE_URL=mysql+pymysql://user:password@movie-db/movie_db
+      - DATABASE_URL=mysql+pymysql://user:password@mysql-server/movie_db
     networks:
       - cinema-network
     depends_on:
-      - movie-db
-
-  movie-db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: movie_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    volumes:
-      - ./services/movie-service/movie.sql:/docker-entrypoint-initdb.d/init.sql
-      - movie-db-data:/var/lib/mysql
-    networks:
-      - cinema-network
+      - mysql-server
 
   # Cinema Service
   cinema-service:
@@ -72,24 +84,11 @@ services:
     ports:
       - "3008:3008"
     environment:
-      - DATABASE_URL=mysql+pymysql://user:password@cinema-db/cinema_db
+      - DATABASE_URL=mysql+pymysql://user:password@mysql-server/cinema_db
     networks:
       - cinema-network
     depends_on:
-      - cinema-db
-
-  cinema-db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: cinema_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    volumes:
-      - ./services/cinema-service/cinema.sql:/docker-entrypoint-initdb.d/init.sql
-      - cinema-db-data:/var/lib/mysql
-    networks:
-      - cinema-network
+      - mysql-server
 
   # Booking Service
   booking-service:
@@ -97,24 +96,11 @@ services:
     ports:
       - "3007:3007"
     environment:
-      - DATABASE_URL=mysql+pymysql://user:password@booking-db/booking_db
+      - DATABASE_URL=mysql+pymysql://user:password@mysql-server/booking_db
     networks:
       - cinema-network
     depends_on:
-      - booking-db
-
-  booking-db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: booking_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    volumes:
-      - ./services/booking-service/booking.sql:/docker-entrypoint-initdb.d/init.sql
-      - booking-db-data:/var/lib/mysql
-    networks:
-      - cinema-network
+      - mysql-server
 
   # Payment Service
   payment-service:
@@ -122,24 +108,11 @@ services:
     ports:
       - "3011:3011"
     environment:
-      - DATABASE_URL=mysql+pymysql://user:password@payment-db/payment_db
+      - DATABASE_URL=mysql+pymysql://user:password@mysql-server/payment_db
     networks:
       - cinema-network
     depends_on:
-      - payment-db
-
-  payment-db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: payment_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    volumes:
-      - ./services/payment-service/payment.sql:/docker-entrypoint-initdb.d/init.sql
-      - payment-db-data:/var/lib/mysql
-    networks:
-      - cinema-network
+      - mysql-server
 
   # Coupon Service
   coupon-service:
@@ -147,33 +120,15 @@ services:
     ports:
       - "3009:3009"
     environment:
-      - DATABASE_URL=mysql+pymysql://user:password@coupon-db/coupon_db
+      - DATABASE_URL=mysql+pymysql://user:password@mysql-server/coupon_db
     networks:
       - cinema-network
     depends_on:
-      - coupon-db
-
-  coupon-db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: coupon_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    volumes:
-      - ./services/coupon-service/coupon.sql:/docker-entrypoint-initdb.d/init.sql
-      - coupon-db-data:/var/lib/mysql
-    networks:
-      - cinema-network
+      - mysql-server
 
 networks:
   cinema-network:
     driver: bridge
 
 volumes:
-  user-db-data:
-  movie-db-data:
-  cinema-db-data:
-  booking-db-data:
-  payment-db-data:
-  coupon-db-data:
+  mysql-data:

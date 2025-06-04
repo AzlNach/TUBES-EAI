@@ -1,5 +1,3 @@
-CREATE DATABASE IF NOT EXISTS coupon_db;
-
 USE coupon_db;
 
 CREATE TABLE IF NOT EXISTS coupons (
