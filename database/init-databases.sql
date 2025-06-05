@@ -6,6 +6,9 @@ CREATE DATABASE IF NOT EXISTS booking_db;
 CREATE DATABASE IF NOT EXISTS payment_db;
 CREATE DATABASE IF NOT EXISTS coupon_db;
 
+-- Create user if not exists and grant permissions
+CREATE USER IF NOT EXISTS 'user'@'%' IDENTIFIED BY 'password';
+
 -- Grant permissions to user for all databases
 GRANT ALL PRIVILEGES ON user_db.* TO 'user'@'%';
 GRANT ALL PRIVILEGES ON movie_db.* TO 'user'@'%';

@@ -8,8 +8,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY app.py .
+# Copy ALL source code including schema.py
+COPY . .
 
 # Expose port
 EXPOSE 5000

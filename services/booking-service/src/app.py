@@ -3,18 +3,41 @@ from models import Booking, db
 from schema import schema
 import os
 import json
+import time
+import sys
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'mysql+pymysql://user:password@booking-db/booking_db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'mysql+pymysql://user:password@mysql-server/booking_db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize db with app
 db.init_app(app)
 
-# Create tables
-with app.app_context():
-    db.create_all()
+def wait_for_db():
+    """Wait for database to be ready"""
+    max_retries = 30
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            with app.app_context():
+                db.create_all()
+                print("Database connection successful!")
+                return True
+        except Exception as e:
+            retry_count += 1
+            print(f"Database connection failed (attempt {retry_count}/{max_retries}): {e}")
+            if retry_count < max_retries:
+                print("Retrying in 2 seconds...")
+                time.sleep(2)
+            else:
+                print("Max retries reached. Exiting.")
+                sys.exit(1)
+    
+    return False
 
+# Wait for database before starting
+wait_for_db()
 # ...existing code...
 @app.route('/graphql', methods=['POST', 'GET'])
 def graphql_endpoint():

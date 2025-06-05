@@ -1,43 +1,33 @@
 version: '3.8'
 
 services:
-  # API Gateway
+  # API Gateway - ONLY EXPOSE THIS TO PUBLIC
   gateway:
     build: ./gateway
     ports:
-      - "5000:5000"
+      - "5000:5000"  # Only gateway exposed to public
     networks:
       - cinema-network
     depends_on:
-      - user-service
-      - movie-service
-      - cinema-service
-      - booking-service
-      - payment-service
-      - coupon-service
+      user-service:
+        condition: service_healthy
+      movie-service:
+        condition: service_healthy
+      cinema-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      coupon-service:
+        condition: service_healthy
 
-  # phpMyAdmin untuk akses database
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
-    environment:
-      PMA_HOST: mysql-server
-      PMA_USER: user
-      PMA_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
-    ports:
-      - "8080:80"
-    networks:
-      - cinema-network
-    depends_on:
-      - mysql-server
-
-  # Single MySQL Server
+  # Remove public port exposure for security
   mysql-server:
     image: mysql:8.0
     container_name: mysql-server
-    ports:
-      - "3306:3306"
+    # ports:
+    #   - "3306:3306"  # ← REMOVE this to prevent direct DB access
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_USER: user
@@ -53,78 +43,143 @@ services:
       - mysql-data:/var/lib/mysql
     networks:
       - cinema-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "user", "-ppassword"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
 
-  # User Service
+  # User Service - NO PUBLIC PORT
   user-service:
     build: ./services/user-service
-    ports:
-      - "3012:3012"
+    # ports:  # ← REMOVE public port access
+    #   - "3012:3012"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/user_db
     networks:
       - cinema-network
     depends_on:
-      - mysql-server
+      mysql-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3012/graphql"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
 
-  # Movie Service
+  # Movie Service - NO PUBLIC PORT
   movie-service:
     build: ./services/movie-service
-    ports:
-      - "3010:3010"
+    # ports:  # ← REMOVE public port access
+    #   - "3010:3010"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/movie_db
     networks:
       - cinema-network
     depends_on:
-      - mysql-server
+      mysql-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/graphql"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
 
-  # Cinema Service
+  # Cinema Service - NO PUBLIC PORT
   cinema-service:
     build: ./services/cinema-service
-    ports:
-      - "3008:3008"
+    # ports:  # ← REMOVE public port access
+    #   - "3008:3008"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/cinema_db
     networks:
       - cinema-network
     depends_on:
-      - mysql-server
+      mysql-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3008/graphql"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
 
-  # Booking Service
+  # Booking Service - NO PUBLIC PORT
   booking-service:
     build: ./services/booking-service
-    ports:
-      - "3007:3007"
+    # ports:  # ← REMOVE public port access
+    #   - "3007:3007"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/booking_db
     networks:
       - cinema-network
     depends_on:
-      - mysql-server
+      mysql-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007/graphql"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
 
-  # Payment Service
+  # Payment Service - NO PUBLIC PORT
   payment-service:
     build: ./services/payment-service
-    ports:
-      - "3011:3011"
+    # ports:  # ← REMOVE public port access
+    #   - "3011:3011"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/payment_db
     networks:
       - cinema-network
     depends_on:
-      - mysql-server
+      mysql-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3011/graphql"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
 
-  # Coupon Service
+  # Coupon Service - NO PUBLIC PORT
   coupon-service:
     build: ./services/coupon-service
-    ports:
-      - "3009:3009"
+    # ports:  # ← REMOVE public port access
+    #   - "3009:3009"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/coupon_db
     networks:
       - cinema-network
     depends_on:
-      - mysql-server
+      mysql-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3009/graphql"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
+
+  # Keep phpMyAdmin for development only
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: mysql-server
+      PMA_USER: user
+      PMA_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "8080:80"  # Only for development
+    networks:
+      - cinema-network
+    depends_on:
+      mysql-server:
+        condition: service_healthy
 
 networks:
   cinema-network:

@@ -6,5 +6,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     name VARCHAR(100) NOT NULL,
     discount_percentage DECIMAL(5, 2) NOT NULL,
     valid_until DATETIME NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    is_auto_generated BOOLEAN DEFAULT FALSE,
+    used_by_user_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

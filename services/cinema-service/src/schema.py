@@ -1,5 +1,6 @@
-from graphene import ObjectType, String, Int, List, Field, Mutation, Schema
+from graphene import ObjectType, String, Int, List, Field, Mutation, Schema, Boolean
 from models import Cinema, db
+import traceback
 
 class CinemaType(ObjectType):
     id = Int()
@@ -7,15 +8,10 @@ class CinemaType(ObjectType):
     location = String()
     capacity = Int()
 
-class Query(ObjectType):
-    cinemas = List(CinemaType)
-    cinema = Field(CinemaType, id=Int(required=True))
-
-    def resolve_cinemas(self, info):
-        return Cinema.query.all()
-
-    def resolve_cinema(self, info, id):
-        return Cinema.query.get(id)
+class CreateCinemaResponse(ObjectType):
+    cinema = Field(CinemaType)
+    success = Boolean()
+    message = String()
 
 class CreateCinema(Mutation):
     class Arguments:
@@ -23,12 +19,25 @@ class CreateCinema(Mutation):
         location = String(required=True)
         capacity = Int()
 
-    cinema = Field(CinemaType)
+    Output = CreateCinemaResponse
 
     def mutate(self, info, name, location, capacity=100):
-        new_cinema = Cinema(name=name, location=location, capacity=capacity)
-        new_cinema.save()
-        return CreateCinema(cinema=new_cinema)
+        try:
+            new_cinema = Cinema(name=name, location=location, capacity=capacity)
+            new_cinema.save()
+            return CreateCinemaResponse(
+                cinema=new_cinema, 
+                success=True, 
+                message="Cinema created successfully"
+            )
+        except Exception as e:
+            traceback.print_exc()
+            db.session.rollback()
+            return CreateCinemaResponse(
+                cinema=None, 
+                success=False, 
+                message=f"Error creating cinema: {str(e)}"
+            )
 
 class UpdateCinema(Mutation):
     class Arguments:
@@ -40,8 +49,11 @@ class UpdateCinema(Mutation):
     cinema = Field(CinemaType)
 
     def mutate(self, info, id, name=None, location=None, capacity=None):
-        cinema = Cinema.query.get(id)
-        if cinema:
+        try:
+            cinema = Cinema.query.get(id)
+            if not cinema:
+                raise Exception(f"Cinema with ID {id} not found")
+                
             if name:
                 cinema.name = name
             if location:
@@ -49,20 +61,52 @@ class UpdateCinema(Mutation):
             if capacity:
                 cinema.capacity = capacity
             cinema.save()
-        return UpdateCinema(cinema=cinema)
+            return UpdateCinema(cinema=cinema)
+        except Exception as e:
+            db.session.rollback()
+            raise Exception(f"Error updating cinema: {str(e)}")
+
+class DeleteCinemaResponse(ObjectType):
+    success = Boolean()
+    message = String()
 
 class DeleteCinema(Mutation):
     class Arguments:
         id = Int(required=True)
 
-    success = String()
+    Output = DeleteCinemaResponse
 
     def mutate(self, info, id):
-        cinema = Cinema.query.get(id)
-        if cinema:
+        try:
+            cinema = Cinema.query.get(id)
+            if not cinema:
+                return DeleteCinemaResponse(success=False, message="Cinema not found")
+                
             cinema.delete()
-            return DeleteCinema(success="Cinema deleted successfully.")
-        return DeleteCinema(success="Cinema not found.")
+            return DeleteCinemaResponse(success=True, message="Cinema deleted successfully")
+        except Exception as e:
+            db.session.rollback()
+            traceback.print_exc()
+            return DeleteCinemaResponse(success=False, message=f"Error deleting cinema: {str(e)}")
+
+class Query(ObjectType):
+    cinemas = List(CinemaType)
+    cinema = Field(CinemaType, id=Int(required=True))
+
+    def resolve_cinemas(self, info):
+        try:
+            return Cinema.query.all()
+        except Exception as e:
+            print(f"Error in resolve_cinemas: {str(e)}")
+            traceback.print_exc()
+            return []
+
+    def resolve_cinema(self, info, id):
+        try:
+            return Cinema.query.get(id)
+        except Exception as e:
+            print(f"Error in resolve_cinema: {str(e)}")
+            return None
 
 class Mutation(ObjectType):
     create_cinema = CreateCinema.Field()

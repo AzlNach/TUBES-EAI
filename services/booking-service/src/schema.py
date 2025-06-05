@@ -1,6 +1,7 @@
-from graphene import ObjectType, String, Int, List, Field, Mutation, Schema, Float, Boolean
+from graphene import ObjectType, String, Int, Float, List, Field, Mutation, Schema, Boolean
 from models import Booking, db
 from datetime import datetime
+import traceback
 
 class BookingType(ObjectType):
     id = Int()
@@ -13,6 +14,11 @@ class BookingType(ObjectType):
     status = String()
     booking_date = String()
 
+class CreateBookingResponse(ObjectType):
+    booking = Field(BookingType)
+    success = Boolean()
+    message = String()
+
 class CreateBooking(Mutation):
     class Arguments:
         user_id = Int(required=True)
@@ -22,26 +28,39 @@ class CreateBooking(Mutation):
         seats = String()
         total_price = Float()
 
-    booking = Field(BookingType)
-    success = Boolean()
-    message = String()
+    Output = CreateBookingResponse
 
     def mutate(self, info, user_id, movie_id, cinema_id, showtime, seats=None, total_price=None):
         try:
             booking = Booking(
-                user_id=user_id, 
-                movie_id=movie_id, 
-                cinema_id=cinema_id, 
+                user_id=user_id,
+                movie_id=movie_id,
+                cinema_id=cinema_id,
                 showtime=showtime,
                 seats=seats,
                 total_price=total_price,
-                status="PENDING",
-                booking_date=datetime.utcnow()
+                status='PENDING'
             )
             booking.save()
-            return CreateBooking(booking=booking, success=True, message="Booking created successfully")
+            
+            return CreateBookingResponse(
+                booking=booking,
+                success=True,
+                message="Booking created successfully"
+            )
         except Exception as e:
-            return CreateBooking(booking=None, success=False, message=f"Error creating booking: {str(e)}")
+            traceback.print_exc()
+            db.session.rollback()
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message=f"Error creating booking: {str(e)}"
+            )
+
+class UpdateBookingResponse(ObjectType):
+    booking = Field(BookingType)
+    success = Boolean()
+    message = String()
 
 class UpdateBooking(Mutation):
     class Arguments:
@@ -53,44 +72,42 @@ class UpdateBooking(Mutation):
         total_price = Float()
         status = String()
 
-    booking = Field(BookingType)
-    success = Boolean()
-    message = String()
+    Output = UpdateBookingResponse
 
     def mutate(self, info, id, movie_id=None, cinema_id=None, showtime=None, seats=None, total_price=None, status=None):
         try:
             booking = Booking.query.get(id)
-            
             if not booking:
-                return UpdateBooking(
+                return UpdateBookingResponse(
                     booking=None,
                     success=False,
                     message=f"Booking with ID {id} not found"
                 )
             
-            # Update fields if provided
-            if movie_id is not None:
+            if movie_id:
                 booking.movie_id = movie_id
-            if cinema_id is not None:
+            if cinema_id:
                 booking.cinema_id = cinema_id
-            if showtime is not None:
+            if showtime:
                 booking.showtime = showtime
-            if seats is not None:
+            if seats:
                 booking.seats = seats
-            if total_price is not None:
+            if total_price:
                 booking.total_price = total_price
-            if status is not None:
+            if status:
                 booking.status = status
                 
             booking.save()
-            return UpdateBooking(
+            
+            return UpdateBookingResponse(
                 booking=booking,
                 success=True,
                 message="Booking updated successfully"
             )
         except Exception as e:
+            traceback.print_exc()
             db.session.rollback()
-            return UpdateBooking(
+            return UpdateBookingResponse(
                 booking=None,
                 success=False,
                 message=f"Error updating booking: {str(e)}"
@@ -101,61 +118,63 @@ class UpdateBookingStatus(Mutation):
         id = Int(required=True)
         status = String(required=True)
 
-    booking = Field(BookingType)
-    success = Boolean()
-    message = String()
+    Output = UpdateBookingResponse
 
     def mutate(self, info, id, status):
         try:
             booking = Booking.query.get(id)
-            
             if not booking:
-                return UpdateBookingStatus(
+                return UpdateBookingResponse(
                     booking=None,
                     success=False,
                     message=f"Booking with ID {id} not found"
                 )
-                
+            
             booking.status = status
             booking.save()
-            return UpdateBookingStatus(
+            
+            return UpdateBookingResponse(
                 booking=booking,
                 success=True,
-                message=f"Booking status updated to {status} successfully"
+                message=f"Booking status updated to {status}"
             )
         except Exception as e:
+            traceback.print_exc()
             db.session.rollback()
-            return UpdateBookingStatus(
+            return UpdateBookingResponse(
                 booking=None,
                 success=False,
                 message=f"Error updating booking status: {str(e)}"
             )
 
+class DeleteBookingResponse(ObjectType):
+    success = Boolean()
+    message = String()
+
 class DeleteBooking(Mutation):
     class Arguments:
         id = Int(required=True)
 
-    success = Boolean()
-    message = String()
+    Output = DeleteBookingResponse
 
     def mutate(self, info, id):
         try:
             booking = Booking.query.get(id)
-            
             if not booking:
-                return DeleteBooking(
+                return DeleteBookingResponse(
                     success=False,
                     message=f"Booking with ID {id} not found"
                 )
-                
+            
             booking.delete()
-            return DeleteBooking(
+            return DeleteBookingResponse(
                 success=True,
-                message=f"Booking with ID {id} deleted successfully"
+                message="Booking deleted successfully"
             )
         except Exception as e:
+            traceback.print_exc()
             db.session.rollback()
-            return DeleteBooking(
+            return DeleteBookingResponse(
                 success=False,
                 message=f"Error deleting booking: {str(e)}"
             )
@@ -163,16 +182,30 @@ class DeleteBooking(Mutation):
 class Query(ObjectType):
     bookings = List(BookingType)
     booking = Field(BookingType, id=Int(required=True))
-    user_bookings = List(BookingType, user_id=Int(required=True))
+    user_bookings = List(BookingType, userId=Int(required=True))  # ← Changed from user_id to userId
 
     def resolve_bookings(self, info):
-        return Booking.query.all()
+        try:
+            return Booking.query.all()
+        except Exception as e:
+            print(f"Error in resolve_bookings: {str(e)}")
+            traceback.print_exc()
+            return []
 
     def resolve_booking(self, info, id):
-        return Booking.query.get(id)
+        try:
+            return Booking.query.get(id)
+        except Exception as e:
+            print(f"Error in resolve_booking: {str(e)}")
+            return None
         
-    def resolve_user_bookings(self, info, user_id):
-        return Booking.query.filter(Booking.user_id == user_id).all()
+    def resolve_user_bookings(self, info, userId):  # ← Changed parameter name
+        try:
+            return Booking.query.filter(Booking.user_id == userId).all()
+        except Exception as e:
+            print(f"Error in resolve_user_bookings: {str(e)}")
+            traceback.print_exc()
+            return []
 
 class Mutation(ObjectType):
     create_booking = CreateBooking.Field()
