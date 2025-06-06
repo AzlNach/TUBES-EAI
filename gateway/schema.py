@@ -143,7 +143,13 @@ class MovieType(ObjectType):
     genre = String()
     duration = Int()
     description = String()
-    release_date = String()
+    releaseDate = String()  # ← Changed from release_date to releaseDate
+    
+    def resolve_releaseDate(self, info):
+        # Convert the database field to the expected format
+        if hasattr(self, 'release_date') and self.release_date:
+            return self.release_date.strftime('%Y-%m-%d')
+        return None
 
 class CinemaType(ObjectType):
     id = Int()
@@ -235,13 +241,14 @@ class Query(ObjectType):
 
     @require_auth
     def resolve_movies(self, info, current_user):
-        query_data = {'query': '{ movies { id title genre duration description release_date } }'}
+        query_data = {'query': '{ movies { id title genre duration description releaseDate } }'}  # ← Changed from release_date to releaseDate
         result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
         
         response = handle_service_response(result, 'movie', 'movies')
         if not response['success']:
             raise Exception(response['error'])
         
+        # No need to map field names since both use the same naming convention now
         return response['data']
 
     @require_auth
@@ -439,23 +446,23 @@ class CreateMovie(Mutation):
         genre = String(required=True)
         duration = Int(required=True)
         description = String()
-        release_date = String()
+        releaseDate = String()  # ← Changed from release_date to releaseDate
 
     Output = CreateMovieResponse
 
     @require_admin
-    def mutate(self, info, current_user, title, genre, duration, description=None, release_date=None):
+    def mutate(self, info, current_user, title, genre, duration, description=None, releaseDate=None):  # ← Changed parameter name
         query_data = {
             'query': '''
-            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $release_date: String) {
-                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, release_date: $release_date) {
+            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $releaseDate: String) {
+                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate) {
                     movie {
                         id
                         title
                         genre
                         duration
                         description
-                        release_date
+                        releaseDate
                     }
                     success
                     message
@@ -467,7 +474,7 @@ class CreateMovie(Mutation):
                 'genre': genre,
                 'duration': duration,
                 'description': description,
-                'release_date': release_date
+                'releaseDate': releaseDate  # ← Updated variable name
             }
         }
         
@@ -647,22 +654,26 @@ class UpdateMovie(Mutation):
         genre = String()
         duration = Int()
         description = String()
-        release_date = String()
+        releaseDate = String()  # ← Changed from release_date
 
     Output = CreateMovieResponse
 
     @require_admin
-    def mutate(self, info, current_user, id, title=None, genre=None, duration=None, description=None, release_date=None):
+    def mutate(self, info, current_user, id, title=None, genre=None, duration=None, description=None, releaseDate=None):
         query_data = {
             'query': '''
-            mutation($id: Int!, $title: String, $genre: String, $duration: Int, $description: String, $release_date: String) {
-                updateMovie(id: $id, title: $title, genre: $genre, duration: $duration, description: $description, release_date: $release_date) {
-                    id
-                    title
-                    genre
-                    duration
-                    description
-                    release_date
+            mutation($id: Int!, $title: String, $genre: String, $duration: Int, $description: String, $releaseDate: String) {
+                updateMovie(id: $id, title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate) {
+                    movie {
+                        id
+                        title
+                        genre
+                        duration
+                        description
+                        releaseDate
+                    }
+                    success
+                    message
                 }
             }
             ''',
@@ -672,24 +683,25 @@ class UpdateMovie(Mutation):
                 'genre': genre,
                 'duration': duration,
                 'description': description,
-                'release_date': release_date
+                'releaseDate': releaseDate  # ← Updated variable name
             }
         }
         
         result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
         
-        response = handle_service_response(result, 'movie')
-        if not response['success']:
-            return CreateMovieResponse(movie=None, success=False, message=response['error'])
+        if not result:
+            return CreateMovieResponse(movie=None, success=False, message="Movie service unavailable")
         
-        movie_result = response['data'].get('updateMovie')
-        if not movie_result:
-            return CreateMovieResponse(movie=None, success=False, message="No updateMovie field in movie service response")
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return CreateMovieResponse(movie=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateMovie', {})
         
         return CreateMovieResponse(
-            movie=movie_result,
-            success=True,
-            message='Movie updated successfully'
+            movie=update_result.get('movie'),
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Movie update completed')
         )
 
 class DeleteMovie(Mutation):
@@ -743,10 +755,14 @@ class UpdateCinema(Mutation):
             'query': '''
             mutation($id: Int!, $name: String, $location: String, $capacity: Int) {
                 updateCinema(id: $id, name: $name, location: $location, capacity: $capacity) {
-                    id
-                    name
-                    location
-                    capacity
+                    cinema {
+                        id
+                        name
+                        location
+                        capacity
+                    }
+                    success
+                    message
                 }
             }
             ''',
@@ -758,21 +774,36 @@ class UpdateCinema(Mutation):
             }
         }
         
+        print(f"Gateway: Sending updateCinema request: {query_data}")  # Debug log
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        print(f"Gateway: Received updateCinema response: {result}")  # Debug log
         
         if not result:
             return CreateCinemaResponse(cinema=None, success=False, message="Cinema service unavailable")
         
-        if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return CreateCinemaResponse(cinema=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        if 'errors' in result and result['errors']:
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict) and 'message' in error:
+                    error_messages.append(error['message'])
+                else:
+                    error_messages.append(str(error))
+            
+            error_msg = f"Cinema service errors: {'; '.join(error_messages)}"
+            return CreateCinemaResponse(cinema=None, success=False, message=error_msg)
         
-        cinema_result = result.get('data', {}).get('updateCinema')
+        data = result.get('data')
+        if not data:
+            return CreateCinemaResponse(cinema=None, success=False, message="No data returned from cinema service")
+        
+        cinema_result = data.get('updateCinema')
+        if not cinema_result:
+            return CreateCinemaResponse(cinema=None, success=False, message="No updateCinema field in response")
         
         return CreateCinemaResponse(
-            cinema=cinema_result,
-            success=True,
-            message='Cinema updated successfully'
+            cinema=cinema_result.get('cinema'),
+            success=cinema_result.get('success', True),
+            message=cinema_result.get('message', 'Cinema updated successfully')
         )
 
 class DeleteCinema(Mutation):
@@ -1019,10 +1050,12 @@ class UpdateUser(Mutation):
             'query': '''
             mutation($id: Int!, $username: String, $email: String, $password: String) {
                 updateUser(id: $id, username: $username, email: $email, password: $password) {
-                    id
-                    username
-                    email
-                    role
+                    user {
+                        id
+                        username
+                        email
+                        role
+                    }
                 }
             }
             ''',
@@ -1044,7 +1077,12 @@ class UpdateUser(Mutation):
         if not user_result:
             raise Exception("No updateUser field in user service response")
         
-        return UpdateUser(user=user_result)
+        # Extract the nested user data
+        user_data = user_result.get('user')
+        if not user_data:
+            raise Exception("No user field in updateUser response")
+        
+        return UpdateUser(user=user_data)
 
 class DeleteUser(Mutation):
     class Arguments:
@@ -1056,7 +1094,7 @@ class DeleteUser(Mutation):
     def mutate(self, info, current_user, id):
         query_data = {
             'query': '''
-            mutation($id: Int!) {
+            mutation($id: $id) {
                 deleteUser(id: $id) {
                     success
                     message
@@ -1090,6 +1128,8 @@ def safe_get_error_messages(errors):
             error_messages.append(error)
         elif isinstance(error, dict):
             error_messages.append(error.get('message', str(error)))
+        elif hasattr(error, 'message'):  # GraphQL error object
+            error_messages.append(str(error.message))
         else:
             error_messages.append(str(error))
     
@@ -1105,7 +1145,13 @@ def handle_service_response(result, service_name, data_key=None):
         }
     
     if result.get('errors'):
-        error_messages = safe_get_error_messages(result['errors'])
+        # Handle different error formats more safely
+        errors = result['errors']
+        if isinstance(errors, list):
+            error_messages = safe_get_error_messages(errors)
+        else:
+            error_messages = [str(errors)]
+        
         return {
             'success': False,
             'error': f"{service_name} service errors: {'; '.join(error_messages)}",
