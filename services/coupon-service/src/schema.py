@@ -1,9 +1,10 @@
 from graphene import ObjectType, String, Float, Int, List, Field, Mutation, Schema, Boolean
 from models import Coupon, db
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import os
 import traceback
+import uuid 
 
 # Add missing imports for HTTP requests and error handling
 try:
@@ -16,12 +17,33 @@ class CouponType(ObjectType):
     id = Int()
     code = String()
     name = String()
-    discount_percentage = Float()
-    valid_until = String()
-    is_active = Boolean()
-    created_at = String()
-    updated_at = String()
+    discountPercentage = Float()
+    validUntil = String()
+    isActive = Boolean()
+    createdAt = String()
+    updatedAt = String()
 
+    def resolve_discountPercentage(self, info):
+        return self.discount_percentage
+    
+    def resolve_validUntil(self, info):
+        if hasattr(self, 'valid_until') and self.valid_until:
+            return self.valid_until.strftime('%Y-%m-%d %H:%M:%S')
+        return None
+    
+    def resolve_isActive(self, info):
+        return self.is_active
+    
+    def resolve_createdAt(self, info):
+        if hasattr(self, 'created_at') and self.created_at:
+            return self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        return None
+    
+    def resolve_updatedAt(self, info):
+        if hasattr(self, 'updated_at') and self.updated_at:
+            return self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        return None
+    
 class CreateCouponResponse(ObjectType):
     coupon = Field(CouponType)
     success = Boolean()
@@ -40,7 +62,7 @@ class TokenVerificationResponse(ObjectType):
 
 class Query(ObjectType):
     coupons = List(CouponType)
-    available_coupons = List(CouponType)  # ← This should match gateway expectation
+    availableCoupons = List(CouponType)  # ← This should match gateway expectation
     coupon = Field(CouponType, id=Int(required=True))
     validate_coupon = Field(Boolean, code=String(required=True))
 
@@ -52,7 +74,7 @@ class Query(ObjectType):
             traceback.print_exc()
             return []
 
-    def resolve_available_coupons(self, info):  # ← This should match the field name
+    def resolve_availableCoupons(self, info):  # ← This should match the field name
         try:
             return Coupon.query.filter(
                 Coupon.is_active == True,
@@ -212,11 +234,9 @@ class GenerateLoyaltyCoupon(Mutation):
                 )
 
             # Generate unique coupon code
-            import uuid
             coupon_code = f"LOYALTY_{user_id}_{uuid.uuid4().hex[:8].upper()}"
 
             # Set expiry to 30 days from now
-            from datetime import timedelta
             expiry_date = datetime.utcnow() + timedelta(days=30)
 
             coupon = Coupon(
@@ -241,7 +261,7 @@ class GenerateLoyaltyCoupon(Mutation):
                 success=False,
                 message=f"Error generating loyalty coupon: {str(e)}"
             )
-
+            
 class UpdateCoupon(Mutation):
     class Arguments:
         id = Int(required=True)
