@@ -46,6 +46,49 @@ def make_service_request(service_url, query_data, service_name="service"):
         print(f"Error connecting to {service_name} service: {str(e)}")
         return None
 
+def handle_service_response(result, service_name, data_key=None):
+    """Centralized service response handler"""
+    if not result:
+        return {
+            'success': False,
+            'error': f"{service_name} service unavailable",
+            'data': None
+        }
+    
+    if result.get('errors'):
+        error_messages = []
+        for error in result['errors']:
+            if isinstance(error, dict):
+                error_messages.append(error.get('message', str(error)))
+            else:
+                error_messages.append(str(error))
+        
+        return {
+            'success': False,
+            'error': f"{service_name} service errors: {'; '.join(error_messages)}",
+            'data': None
+        }
+    
+    data = result.get('data')
+    if not data:
+        return {
+            'success': False,
+            'error': f"No data returned from {service_name} service",
+            'data': None
+        }
+    
+    if data_key:
+        service_data = data.get(data_key)
+        if service_data is None:
+            return {
+                'success': False,
+                'error': f"No {data_key} field in {service_name} service response",
+                'data': None
+            }
+        return {'success': True, 'error': None, 'data': service_data}
+    
+    return {'success': True, 'error': None, 'data': data}
+
 def verify_token_from_context(info):
     """Extract and verify token from GraphQL context"""
     try:
@@ -53,11 +96,9 @@ def verify_token_from_context(info):
         authorization = context.get('Authorization') or context.get('HTTP_AUTHORIZATION')
         
         if not authorization:
-            print("Gateway: No authorization header found")
             raise Exception("Token is missing!")
         
         token = authorization.split(' ')[1] if ' ' in authorization else authorization
-        print(f"Gateway: Extracted token: {token[:20]}...")  # Debug log (first 20 chars only)
         
         query_data = {
             'query': '''
@@ -73,44 +114,23 @@ def verify_token_from_context(info):
             'variables': {'token': token}
         }
         
-        print(f"Gateway: Sending verification request to user service")
         result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
-        print(f"Gateway: Received verification response: {result}")
+        response = handle_service_response(result, 'user')
         
-        if not result:
-            print("Gateway: User service returned None for token verification")
-            raise Exception("User service unavailable for token verification!")
+        if not response['success']:
+            raise Exception(response['error'])
         
-        if result.get('errors'):
-            error_messages = [str(error) for error in result['errors']]
-            print(f"Gateway: User service returned verification errors: {error_messages}")
-            raise Exception(f"Token verification errors: {'; '.join(error_messages)}")
+        token_data = response['data'].get('verifyToken')
+        if not token_data or not token_data.get('valid'):
+            raise Exception(token_data.get('error', 'Invalid token'))
         
-        data = result.get('data')
-        if not data:
-            print("Gateway: No data in token verification response")
-            raise Exception("No data returned from token verification!")
-        
-        token_data = data.get('verifyToken')
-        if not token_data:
-            print("Gateway: No verifyToken field in response")
-            raise Exception("Invalid token verification response!")
-        
-        if not token_data.get('valid', False):
-            error_msg = token_data.get('error', 'Invalid token')
-            print(f"Gateway: Token verification failed: {error_msg}")
-            raise Exception(f"Token verification failed: {error_msg}")
-        
-        user_info = {
-            'user_id': token_data.get('userId'),  # ← Changed from user_id to userId
+        return {
+            'user_id': token_data.get('userId'),
             'role': token_data.get('role', 'USER')
         }
-        print(f"Gateway: Token verification successful for user: {user_info}")
-        return user_info
         
     except Exception as e:
-        print(f"Gateway: Error in verify_token_from_context: {str(e)}")
-        raise e
+        raise Exception(f"Authentication failed: {str(e)}")
 
 def require_auth(f):
     """Decorator for requiring authentication"""
@@ -130,7 +150,10 @@ def require_admin(f):
         return f(self, info, current_user=current_user, **kwargs)
     return wrapper
 
-# GraphQL Types
+# ============================================================================
+# GRAPHQL TYPES (Konsisten dengan service schemas)
+# ============================================================================
+
 class UserType(ObjectType):
     id = Int()
     username = String()
@@ -143,7 +166,7 @@ class MovieType(ObjectType):
     genre = String()
     duration = Int()
     description = String()
-    release_date = String()
+    releaseDate = String()
 
 class CinemaType(ObjectType):
     id = Int()
@@ -152,27 +175,29 @@ class CinemaType(ObjectType):
     capacity = Int()
 
 class BookingType(ObjectType):
+    """Booking type - disesuaikan dengan booking service schema"""
     id = Int()
-    user_id = Int()
-    movie_id = Int()
-    cinema_id = Int()
+    userId = Int()      # Booking service menggunakan userId (camelCase)
+    movieId = Int()     # Booking service menggunakan movieId (camelCase)
+    cinemaId = Int()    # Booking service menggunakan cinemaId (camelCase)
     showtime = String()
     seats = String()
-    total_price = Float()
+    totalPrice = Float()  # Booking service menggunakan totalPrice (camelCase)
     status = String()
-    booking_date = String()
+    bookingDate = String()  # Booking service menggunakan bookingDate (camelCase)
 
 class PaymentType(ObjectType):
+    """Payment type - consistent with payment service schema"""
     id = Int()
-    user_id = Int()
-    booking_id = Int()
+    userId = Int()              # Changed from user_id to userId
+    bookingId = Int()           # Changed from booking_id to bookingId
     amount = Float()
-    payment_method = String()
+    paymentMethod = String()    # Changed from payment_method to paymentMethod
     status = String()
-    payment_proof_image = String()
-    created_at = String()
-    updated_at = String()
-    can_be_deleted = Boolean()
+    paymentProofImage = String() # Changed from payment_proof_image to paymentProofImage
+    createdAt = String()        # Changed from created_at to createdAt
+    updatedAt = String()        # Changed from updated_at to updatedAt
+    canBeDeleted = Boolean()    # Changed from can_be_deleted to canBeDeleted
 
 class CouponType(ObjectType):
     id = Int()
@@ -182,15 +207,39 @@ class CouponType(ObjectType):
     valid_until = String()
     is_active = Boolean()
 
+# ============================================================================
+# RESPONSE TYPES
+# ============================================================================
+
 class AuthResponse(ObjectType):
     success = Boolean()
     token = String()
     message = String()
     user = Field(UserType)
 
-# Add these response types first
+class CreateMovieResponse(ObjectType):
+    movie = Field(MovieType)
+    success = Boolean()
+    message = String()
+
 class CreateCinemaResponse(ObjectType):
     cinema = Field(CinemaType)
+    success = Boolean()
+    message = String()
+
+class CreateBookingResponse(ObjectType):
+    booking = Field(BookingType)
+    success = Boolean()
+    message = String()
+
+class UpdateBookingResponse(ObjectType):
+    booking = Field(BookingType)
+    success = Boolean()
+    message = String()
+
+class CreatePaymentResponse(ObjectType):
+    """Payment creation response - missing response type"""
+    payment = Field(PaymentType)
     success = Boolean()
     message = String()
 
@@ -204,16 +253,14 @@ class UseCouponResponse(ObjectType):
     message = String()
     discount_amount = Float()
 
-class UpdateBookingResponse(ObjectType):
-    booking = Field(BookingType)
-    success = Boolean()
-    message = String()
-
 class DeleteResponse(ObjectType):
     success = Boolean()
     message = String()
 
-# Queries
+# ============================================================================
+# QUERY RESOLVERS
+# ============================================================================
+
 class Query(ObjectType):
     # Public queries
     test = String()
@@ -225,23 +272,27 @@ class Query(ObjectType):
     my_bookings = List(BookingType)
     my_payments = List(PaymentType)
     
+    # Get by ID queries (authenticated)
+    movie = Field(MovieType, id=Int(required=True))
+    cinema = Field(CinemaType, id=Int(required=True))
+    user = Field(UserType, id=Int(required=True))
+    
     # Admin queries
     all_bookings = List(BookingType)
     all_payments = List(PaymentType)
     users = List(UserType)
 
     def resolve_test(self, info):
-        return "GraphQL Gateway is working!"
+        return "Cinema GraphQL Gateway is operational"
 
     @require_auth
     def resolve_movies(self, info, current_user):
-        query_data = {'query': '{ movies { id title genre duration description release_date } }'}
+        query_data = {'query': '{ movies { id title genre duration description releaseDate } }'}
         result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
         
         response = handle_service_response(result, 'movie', 'movies')
         if not response['success']:
             raise Exception(response['error'])
-        
         return response['data']
 
     @require_auth
@@ -252,37 +303,35 @@ class Query(ObjectType):
         response = handle_service_response(result, 'cinema', 'cinemas')
         if not response['success']:
             raise Exception(response['error'])
-        
         return response['data']
 
     @require_auth
     def resolve_available_coupons(self, info, current_user):
-        query_data = {'query': '{ available_coupons { id code name discount_percentage valid_until is_active } }'}  # ← Changed to match service
+        query_data = {'query': '{ available_coupons { id code name discount_percentage valid_until is_active } }'}
         result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
         
-        response = handle_service_response(result, 'coupon', 'available_coupons')  # ← Changed field name
+        response = handle_service_response(result, 'coupon', 'available_coupons')
         if not response['success']:
             raise Exception(response['error'])
-        
         return response['data']
 
     @require_auth
     def resolve_my_bookings(self, info, current_user):
+        """Query disesuaikan dengan booking service schema (camelCase)"""
         user_id = current_user['user_id']
-        query = f'{{ userBookings(userId: {user_id}) {{ id user_id movie_id cinema_id showtime seats total_price status booking_date }} }}'
+        query = f'{{ userBookings(userId: {user_id}) {{ id userId movieId cinemaId showtime seats totalPrice status bookingDate }} }}'
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
         
         response = handle_service_response(result, 'booking', 'userBookings')
         if not response['success']:
             raise Exception(response['error'])
-        
         return response['data']
 
     @require_auth
     def resolve_my_payments(self, info, current_user):
         user_id = current_user['user_id']
-        query = f'{{ userPayments(userId: {user_id}) {{ id user_id booking_id amount payment_method status payment_proof_image created_at updated_at can_be_deleted }} }}'
+        query = f'{{ userPayments(userId: {user_id}) {{ id userId bookingId amount paymentMethod paymentProofImage createdAt updatedAt canBeDeleted }} }}'
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['payment'], query_data, 'payment')
         
@@ -290,23 +339,28 @@ class Query(ObjectType):
         if not response['success']:
             raise Exception(response['error'])
         
-        return response['data']
+        # Add virtual status to each payment
+        payments = response['data']
+        for payment in payments:
+            payment['status'] = 'PAID'  # ← Changed to uppercase - All payments are considered 'PAID'
+        
+        return payments
 
     @require_admin
     def resolve_all_bookings(self, info, current_user):
-        query = '{ bookings { id user_id movie_id cinema_id showtime seats total_price status booking_date } }'
+        """Query disesuaikan dengan booking service schema (camelCase)"""
+        query = '{ bookings { id userId movieId cinemaId showtime seats totalPrice status bookingDate } }'
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
         
         response = handle_service_response(result, 'booking', 'bookings')
         if not response['success']:
             raise Exception(response['error'])
-        
         return response['data']
 
     @require_admin
     def resolve_all_payments(self, info, current_user):
-        query = '{ payments { id user_id booking_id amount payment_method status payment_proof_image created_at updated_at } }'
+        query = '{ payments { id userId bookingId amount paymentMethod paymentProofImage createdAt updatedAt } }'
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['payment'], query_data, 'payment')
         
@@ -314,24 +368,122 @@ class Query(ObjectType):
         if not response['success']:
             raise Exception(response['error'])
         
-        return response['data']
+        # Add virtual status to each payment
+        payments = response['data']
+        for payment in payments:
+            payment['status'] = 'PAID'  # ← Changed to uppercase - All payments are considered 'PAID'
+        
+        return payments
 
     @require_admin
     def resolve_users(self, info, current_user):
         query = '{ users { id username email role } }'
         query_data = {'query': query}
-        
-        print(f"Gateway: Requesting users from user service")
         result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
         
         response = handle_service_response(result, 'user', 'users')
         if not response['success']:
             raise Exception(response['error'])
-        
-        print(f"Gateway: Successfully retrieved {len(response['data'])} users")
         return response['data']
 
-# Mutations
+    # ============================================================================
+    # GET BY ID RESOLVERS
+    # ============================================================================
+
+    @require_auth
+    def resolve_movie(self, info, current_user, id):
+        """Get single movie by ID"""
+        query_data = {
+            'query': f'''
+            {{
+                movie(id: {id}) {{
+                    id
+                    title
+                    genre
+                    duration
+                    description
+                    releaseDate
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
+        
+        response = handle_service_response(result, 'movie', 'movie')
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        movie_data = response['data']
+        if not movie_data:
+            raise Exception(f"Movie with ID {id} not found")
+        
+        return movie_data
+
+    @require_auth
+    def resolve_cinema(self, info, current_user, id):
+        """Get single cinema by ID"""
+        query_data = {
+            'query': f'''
+            {{
+                cinema(id: {id}) {{
+                    id
+                    name
+                    location
+                    capacity
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', 'cinema')
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        cinema_data = response['data']
+        if not cinema_data:
+            raise Exception(f"Cinema with ID {id} not found")
+        
+        return cinema_data
+
+    @require_auth
+    def resolve_user(self, info, current_user, id):
+        """Get single user by ID - users can only see their own profile, admins can see any"""
+        # Regular users can only see their own profile
+        if current_user['role'] != 'ADMIN' and current_user['user_id'] != id:
+            raise Exception("You can only view your own profile")
+        
+        query_data = {
+            'query': f'''
+            {{
+                user(id: {id}) {{
+                    id
+                    username
+                    email
+                    role
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
+        
+        response = handle_service_response(result, 'user', 'user')
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        user_data = response['data']
+        if not user_data:
+            raise Exception(f"User with ID {id} not found")
+        
+        return user_data
+
+# ============================================================================
+# MUTATION RESOLVERS
+# ============================================================================
+
 class RegisterUser(Mutation):
     class Arguments:
         username = String(required=True)
@@ -348,30 +500,18 @@ class RegisterUser(Mutation):
                 createUser(username: $username, email: $email, password: $password, role: $role) {
                     success
                     message
-                    user {
-                        id
-                        username
-                        email
-                        role
-                    }
+                    user { id username email role }
                 }
             }
             ''',
-            'variables': {
-                'username': username,
-                'email': email,
-                'password': password,
-                'role': role
-            }
+            'variables': {'username': username, 'email': email, 'password': password, 'role': role}
         }
         
         result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
-        
         if not result:
             raise Exception("User service unavailable")
         
         create_result = result.get('data', {}).get('createUser', {})
-        
         if not create_result.get('success'):
             raise Exception(create_result.get('message', 'Registration failed'))
         
@@ -396,28 +536,18 @@ class LoginUser(Mutation):
                     success
                     token
                     message
-                    user {
-                        id
-                        username
-                        email
-                        role
-                    }
+                    user { id username email role }
                 }
             }
             ''',
-            'variables': {
-                'email': email,
-                'password': password
-            }
+            'variables': {'email': email, 'password': password}
         }
         
         result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
-        
         if not result:
             raise Exception("User service unavailable")
         
         login_result = result.get('data', {}).get('loginUser', {})
-        
         if not login_result.get('success'):
             raise Exception(login_result.get('message', 'Login failed'))
         
@@ -428,89 +558,34 @@ class LoginUser(Mutation):
             user=login_result.get('user')
         )
 
-class CreateMovieResponse(ObjectType):
-    movie = Field(MovieType)
-    success = Boolean()
-    message = String()
-
-class CreateMovie(Mutation):
-    class Arguments:
-        title = String(required=True)
-        genre = String(required=True)
-        duration = Int(required=True)
-        description = String()
-        release_date = String()
-
-    Output = CreateMovieResponse
-
-    @require_admin
-    def mutate(self, info, current_user, title, genre, duration, description=None, release_date=None):
-        query_data = {
-            'query': '''
-            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $release_date: String) {
-                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, release_date: $release_date) {
-                    movie {
-                        id
-                        title
-                        genre
-                        duration
-                        description
-                        release_date
-                    }
-                    success
-                    message
-                }
-            }
-            ''',
-            'variables': {
-                'title': title,
-                'genre': genre,
-                'duration': duration,
-                'description': description,
-                'release_date': release_date
-            }
-        }
-        
-        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
-        
-        response = handle_service_response(result, 'movie')
-        if not response['success']:
-            return CreateMovieResponse(movie=None, success=False, message=response['error'])
-        
-        create_result = response['data'].get('createMovie', {})
-        
-        return CreateMovieResponse(
-            movie=create_result.get('movie'),
-            success=create_result.get('success', False),
-            message=create_result.get('message', 'Movie operation completed')
-        )
-
 class CreateBooking(Mutation):
+    """Create booking - disesuaikan dengan booking service schema"""
     class Arguments:
-        movie_id = Int(required=True)
-        cinema_id = Int(required=True)
+        movieId = Int(required=True)
+        cinemaId = Int(required=True)
         showtime = String(required=True)
         seats = String()
-        total_price = Float()
+        totalPrice = Float()
 
-    booking = Field(BookingType)
+    Output = CreateBookingResponse
 
     @require_auth
-    def mutate(self, info, current_user, movie_id, cinema_id, showtime, seats=None, total_price=None):
+    def mutate(self, info, current_user, movieId, cinemaId, showtime, seats=None, totalPrice=None):
+        # Booking service expects camelCase parameters and returns camelCase fields
         query_data = {
             'query': '''
-            mutation($user_id: Int!, $movie_id: Int!, $cinema_id: Int!, $showtime: String!, $seats: String, $total_price: Float) {
-                createBooking(user_id: $user_id, movie_id: $movie_id, cinema_id: $cinema_id, showtime: $showtime, seats: $seats, total_price: $total_price) {
+            mutation($userId: Int!, $movieId: Int!, $cinemaId: Int!, $showtime: String!, $seats: String, $totalPrice: Float) {
+                createBooking(userId: $userId, movieId: $movieId, cinemaId: $cinemaId, showtime: $showtime, seats: $seats, totalPrice: $totalPrice) {
                     booking {
                         id
-                        user_id
-                        movie_id
-                        cinema_id
+                        userId
+                        movieId
+                        cinemaId
                         showtime
                         seats
-                        total_price
+                        totalPrice
                         status
-                        booking_date
+                        bookingDate
                     }
                     success
                     message
@@ -518,327 +593,93 @@ class CreateBooking(Mutation):
             }
             ''',
             'variables': {
-                'user_id': current_user['user_id'],
-                'movie_id': movie_id,
-                'cinema_id': cinema_id,
+                'userId': current_user['user_id'],     # Map to camelCase
+                'movieId': movieId,                    # Already camelCase
+                'cinemaId': cinemaId,                  # Already camelCase
                 'showtime': showtime,
                 'seats': seats,
-                'total_price': total_price
+                'totalPrice': totalPrice               # Already camelCase
             }
         }
         
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
-        
         if not result:
-            raise Exception("Booking service unavailable")
+            return CreateBookingResponse(
+                booking=None, 
+                success=False, 
+                message="Booking service unavailable"
+            )
         
-        booking_result = result.get('data', {}).get('createBooking', {})
+        # Improved error handling
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message=f"Booking errors: {'; '.join(error_messages)}"
+            )
         
+        data = result.get('data')
+        if not data:
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message="No data returned from booking service"
+            )
+        
+        booking_result = data.get('createBooking', {})
         if not booking_result.get('success'):
-            raise Exception(booking_result.get('message', 'Failed to create booking'))
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message=booking_result.get('message', 'Failed to create booking')
+            )
         
-        return CreateBooking(booking=booking_result.get('booking'))
-
-class CreatePayment(Mutation):
-    class Arguments:
-        amount = Float(required=True)
-        booking_id = Int(required=True)
-        payment_method = String()
-        payment_proof_image = String()
-
-    payment = Field(PaymentType)
-
-    @require_auth
-    def mutate(self, info, current_user, amount, booking_id, payment_method='CREDIT_CARD', payment_proof_image=None):
-        query_data = {
-            'query': '''
-            mutation($amount: Float!, $user_id: Int!, $booking_id: Int!, $payment_method: String, $payment_proof_image: String) {
-                createPayment(amount: $amount, user_id: $user_id, booking_id: $booking_id, payment_method: $payment_method, payment_proof_image: $payment_proof_image) {
-                    payment {
-                        id
-                        amount
-                        user_id
-                        booking_id
-                        payment_method
-                        status
-                        payment_proof_image
-                        created_at
-                        updated_at
-                    }
-                    success
-                    message
-                }
-            }
-            ''',
-            'variables': {
-                'amount': amount,
-                'user_id': current_user['user_id'],
-                'booking_id': booking_id,
-                'payment_method': payment_method,
-                'payment_proof_image': payment_proof_image
-            }
-        }
-        
-        result = make_service_request(SERVICE_URLS['payment'], query_data, 'payment')
-        
-        if not result:
-            raise Exception("Payment service unavailable")
-        
-        payment_result = result.get('data', {}).get('createPayment', {})
-        
-        if not payment_result.get('success'):
-            raise Exception(payment_result.get('message', 'Failed to create payment'))
-        
-        return CreatePayment(payment=payment_result.get('payment'))
-
-class CreateCinema(Mutation):
-    class Arguments:
-        name = String(required=True)
-        location = String(required=True)
-        capacity = Int(required=True)
-
-    Output = CreateCinemaResponse
-
-    @require_admin
-    def mutate(self, info, current_user, name, location, capacity):
-        query_data = {
-            'query': '''
-            mutation($name: String!, $location: String!, $capacity: Int!) {
-                createCinema(name: $name, location: $location, capacity: $capacity) {
-                    cinema {
-                        id
-                        name
-                        location
-                        capacity
-                    }
-                    success
-                    message
-                }
-            }
-            ''',
-            'variables': {
-                'name': name,
-                'location': location,
-                'capacity': capacity
-            }
-        }
-        
-        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
-        
-        if not result:
-            return CreateCinemaResponse(cinema=None, success=False, message="Cinema service unavailable")
-        
-        if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return CreateCinemaResponse(cinema=None, success=False, message=f"Error: {'; '.join(error_messages)}")
-        
-        create_result = result.get('data', {}).get('createCinema', {})
-        
-        return CreateCinemaResponse(
-            cinema=create_result.get('cinema'),
-            success=create_result.get('success', False),
-            message=create_result.get('message', 'Cinema operation completed')
-        )
-
-class UpdateMovie(Mutation):
-    class Arguments:
-        id = Int(required=True)
-        title = String()
-        genre = String()
-        duration = Int()
-        description = String()
-        release_date = String()
-
-    Output = CreateMovieResponse
-
-    @require_admin
-    def mutate(self, info, current_user, id, title=None, genre=None, duration=None, description=None, release_date=None):
-        query_data = {
-            'query': '''
-            mutation($id: Int!, $title: String, $genre: String, $duration: Int, $description: String, $release_date: String) {
-                updateMovie(id: $id, title: $title, genre: $genre, duration: $duration, description: $description, release_date: $release_date) {
-                    id
-                    title
-                    genre
-                    duration
-                    description
-                    release_date
-                }
-            }
-            ''',
-            'variables': {
-                'id': id,
-                'title': title,
-                'genre': genre,
-                'duration': duration,
-                'description': description,
-                'release_date': release_date
-            }
-        }
-        
-        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
-        
-        response = handle_service_response(result, 'movie')
-        if not response['success']:
-            return CreateMovieResponse(movie=None, success=False, message=response['error'])
-        
-        movie_result = response['data'].get('updateMovie')
-        if not movie_result:
-            return CreateMovieResponse(movie=None, success=False, message="No updateMovie field in movie service response")
-        
-        return CreateMovieResponse(
-            movie=movie_result,
+        # No field transformation needed since both use camelCase
+        return CreateBookingResponse(
+            booking=booking_result.get('booking'),
             success=True,
-            message='Movie updated successfully'
-        )
-
-class DeleteMovie(Mutation):
-    class Arguments:
-        id = Int(required=True)
-
-    Output = DeleteResponse
-
-    @require_admin
-    def mutate(self, info, current_user, id):
-        query_data = {
-            'query': '''
-            mutation($id: Int!) {
-                deleteMovie(id: $id) {
-                    success
-                    message
-                }
-            }
-            ''',
-            'variables': {'id': id}
-        }
-        
-        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
-        
-        if not result:
-            return DeleteResponse(success=False, message="Movie service unavailable")
-        
-        if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
-        
-        delete_result = result.get('data', {}).get('deleteMovie', {})
-        
-        return DeleteResponse(
-            success=delete_result.get('success', False),
-            message=delete_result.get('message', 'Movie deletion completed')
-        )
-
-class UpdateCinema(Mutation):
-    class Arguments:
-        id = Int(required=True)
-        name = String()
-        location = String()
-        capacity = Int()
-
-    Output = CreateCinemaResponse
-
-    @require_admin
-    def mutate(self, info, current_user, id, name=None, location=None, capacity=None):
-        query_data = {
-            'query': '''
-            mutation($id: Int!, $name: String, $location: String, $capacity: Int) {
-                updateCinema(id: $id, name: $name, location: $location, capacity: $capacity) {
-                    id
-                    name
-                    location
-                    capacity
-                }
-            }
-            ''',
-            'variables': {
-                'id': id,
-                'name': name,
-                'location': location,
-                'capacity': capacity
-            }
-        }
-        
-        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
-        
-        if not result:
-            return CreateCinemaResponse(cinema=None, success=False, message="Cinema service unavailable")
-        
-        if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return CreateCinemaResponse(cinema=None, success=False, message=f"Error: {'; '.join(error_messages)}")
-        
-        cinema_result = result.get('data', {}).get('updateCinema')
-        
-        return CreateCinemaResponse(
-            cinema=cinema_result,
-            success=True,
-            message='Cinema updated successfully'
-        )
-
-class DeleteCinema(Mutation):
-    class Arguments:
-        id = Int(required=True)
-
-    Output = DeleteResponse
-
-    @require_admin
-    def mutate(self, info, current_user, id):
-        query_data = {
-            'query': '''
-            mutation($id: Int!) {
-                deleteCinema(id: $id) {
-                    success
-                    message
-                }
-            }
-            ''',
-            'variables': {'id': id}
-        }
-        
-        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
-        
-        if not result:
-            return DeleteResponse(success=False, message="Cinema service unavailable")
-        
-        if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
-        
-        delete_result = result.get('data', {}).get('deleteCinema', {})
-        
-        return DeleteResponse(
-            success=delete_result.get('success', False),
-            message=delete_result.get('message', 'Cinema deletion completed')
+            message=booking_result.get('message', 'Booking created successfully')
         )
 
 class UpdateBooking(Mutation):
+    """Update booking - disesuaikan dengan booking service schema"""
     class Arguments:
         id = Int(required=True)
-        movie_id = Int()
-        cinema_id = Int()
+        movieId = Int()
+        cinemaId = Int()
         showtime = String()
         seats = String()
-        total_price = Float()
+        totalPrice = Float()
         status = String()
 
     Output = UpdateBookingResponse
 
     @require_auth
-    def mutate(self, info, current_user, id, movie_id=None, cinema_id=None, showtime=None, seats=None, total_price=None, status=None):
+    def mutate(self, info, current_user, id, movieId=None, cinemaId=None, showtime=None, seats=None, totalPrice=None, status=None):
+        # Booking service expects camelCase parameters
         query_data = {
             'query': '''
-            mutation($id: Int!, $movie_id: Int, $cinema_id: Int, $showtime: String, $seats: String, $total_price: Float, $status: String) {
-                updateBooking(id: $id, movie_id: $movie_id, cinema_id: $cinema_id, showtime: $showtime, seats: $seats, total_price: $total_price, status: $status) {
+            mutation($id: Int!, $movieId: Int, $cinemaId: Int, $showtime: String, $seats: String, $totalPrice: Float, $status: String) {
+                updateBooking(id: $id, movieId: $movieId, cinemaId: $cinemaId, showtime: $showtime, seats: $seats, totalPrice: $totalPrice, status: $status) {
                     booking {
                         id
-                        user_id
-                        movie_id
-                        cinema_id
+                        userId
+                        movieId
+                        cinemaId
                         showtime
                         seats
-                        total_price
+                        totalPrice
                         status
-                        booking_date
+                        bookingDate
                     }
                     success
                     message
@@ -847,26 +688,29 @@ class UpdateBooking(Mutation):
             ''',
             'variables': {
                 'id': id,
-                'movie_id': movie_id,
-                'cinema_id': cinema_id,
+                'movieId': movieId,        # Use camelCase
+                'cinemaId': cinemaId,      # Use camelCase
                 'showtime': showtime,
                 'seats': seats,
-                'total_price': total_price,
+                'totalPrice': totalPrice,  # Use camelCase
                 'status': status
             }
         }
         
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
-        
         if not result:
             return UpdateBookingResponse(booking=None, success=False, message="Booking service unavailable")
         
         if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                else:
+                    error_messages.append(str(error))
             return UpdateBookingResponse(booking=None, success=False, message=f"Error: {'; '.join(error_messages)}")
         
         booking_result = result.get('data', {}).get('updateBooking', {})
-        
         return UpdateBookingResponse(
             booking=booking_result.get('booking'),
             success=booking_result.get('success', False),
@@ -894,7 +738,6 @@ class DeleteBooking(Mutation):
         }
         
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
-        
         if not result:
             return DeleteResponse(success=False, message="Booking service unavailable")
         
@@ -903,34 +746,62 @@ class DeleteBooking(Mutation):
             return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
         
         delete_result = result.get('data', {}).get('deleteBooking', {})
-        
         return DeleteResponse(
             success=delete_result.get('success', False),
             message=delete_result.get('message', 'Booking deletion completed')
         )
 
-class CreateCoupon(Mutation):
+class CreatePayment(Mutation):
     class Arguments:
-        code = String(required=True)
-        name = String(required=True)
-        discount_percentage = Float(required=True)
-        valid_until = String(required=True)
+        amount = Float(required=True)
+        bookingId = Int(required=True)
+        paymentMethod = String()
+        paymentProofImage = String()
 
-    Output = CreateCouponResponse
+    Output = CreatePaymentResponse
 
-    @require_admin
-    def mutate(self, info, current_user, code, name, discount_percentage, valid_until):
-        query_data = {
+    @require_auth
+    def mutate(self, info, current_user, amount, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None):
+        # Step 1: Check booking exists and is in 'PENDING' status
+        booking_check_query = {
+            'query': f'''
+            {{
+                userBookings(userId: {current_user['user_id']}) {{
+                    id
+                    status
+                    totalPrice
+                }}
+            }}
+            ''',
+        }
+        
+        booking_result = make_service_request(SERVICE_URLS['booking'], booking_check_query, 'booking')
+        if not booking_result:
+            raise Exception("Booking service unavailable")
+        
+        user_bookings = booking_result.get('data', {}).get('userBookings', [])
+        target_booking = next((b for b in user_bookings if b['id'] == bookingId), None)
+        
+        if not target_booking:
+            raise Exception(f"Booking {bookingId} not found or not owned by user")
+        
+        if target_booking['status'] != 'PENDING':
+            raise Exception(f"Booking {bookingId} is already {target_booking['status']}. Only PENDING bookings can be paid.")
+        
+        # Step 2: Create payment (without status attribute)
+        payment_query = {
             'query': '''
-            mutation($code: String!, $name: String!, $discount_percentage: Float!, $valid_until: String!) {
-                createCoupon(code: $code, name: $name, discount_percentage: $discount_percentage, valid_until: $valid_until) {
-                    coupon {
+            mutation($amount: Float!, $userId: Int!, $bookingId: Int!, $paymentMethod: String, $paymentProofImage: String) {
+                createPayment(amount: $amount, userId: $userId, bookingId: $bookingId, paymentMethod: $paymentMethod, paymentProofImage: $paymentProofImage) {
+                    payment {
                         id
-                        code
-                        name
-                        discount_percentage
-                        valid_until
-                        is_active
+                        userId
+                        bookingId
+                        amount
+                        paymentMethod
+                        paymentProofImage
+                        createdAt
+                        updatedAt
                     }
                     success
                     message
@@ -938,28 +809,146 @@ class CreateCoupon(Mutation):
             }
             ''',
             'variables': {
-                'code': code,
-                'name': name,
-                'discount_percentage': discount_percentage,
-                'valid_until': valid_until
+                'amount': amount,
+                'userId': current_user['user_id'],
+                'bookingId': bookingId,
+                'paymentMethod': paymentMethod,
+                'paymentProofImage': paymentProofImage
             }
         }
         
-        result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
+        payment_result = make_service_request(SERVICE_URLS['payment'], payment_query, 'payment')
+        if not payment_result:
+            raise Exception("Payment service unavailable")
         
+        if payment_result.get('errors'):
+            error_messages = []
+            for error in payment_result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                else:
+                    error_messages.append(str(error))
+            raise Exception(f"Payment creation failed: {'; '.join(error_messages)}")
+        
+        payment_data = payment_result.get('data', {}).get('createPayment', {})
+        if not payment_data.get('success'):
+            raise Exception(payment_data.get('message', 'Failed to create payment'))
+        
+        # Step 3: Automatically update booking status to 'PAID'
+        booking_update_query = {
+            'query': '''
+            mutation($id: Int!, $status: String!) {
+                updateBooking(id: $id, status: $status) {
+                    booking {
+                        id
+                        status
+                    }
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': bookingId,
+                'status': 'PAID'  # ← Changed to uppercase
+            }
+        }
+        
+        booking_update_result = make_service_request(SERVICE_URLS['booking'], booking_update_query, 'booking')
+        if not booking_update_result or booking_update_result.get('errors'):
+            # Payment created but booking status update failed - this is critical
+            print(f"CRITICAL: Payment {payment_data.get('payment', {}).get('id')} created but booking {bookingId} status update failed")
+            
+        # Step 4: Add virtual status field to payment response
+        payment = payment_data.get('payment')
+        if payment:
+            # Add status based on booking status update success
+            payment['status'] = 'PAID'  # ← Changed to uppercase, since payment creation implies immediate payment
+        
+        return CreatePaymentResponse(
+            payment=payment,
+            success=True,
+            message=f"Payment created successfully and booking status updated to 'PAID'"
+        )
+
+# Admin mutations (Movie, Cinema, User, Coupon)
+class CreateMovie(Mutation):
+    class Arguments:
+        title = String(required=True)
+        genre = String(required=True)
+        duration = Int(required=True)
+        description = String()
+        releaseDate = String()
+
+    Output = CreateMovieResponse
+
+    @require_admin
+    def mutate(self, info, current_user, title, genre, duration, description=None, releaseDate=None):
+        query_data = {
+            'query': '''
+            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $releaseDate: String) {
+                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate) {
+                    movie {
+                        id title genre duration description releaseDate
+                    }
+                    success message
+                }
+            }
+            ''',
+            'variables': {
+                'title': title, 'genre': genre, 'duration': duration,
+                'description': description, 'releaseDate': releaseDate
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
+        response = handle_service_response(result, 'movie')
+        
+        if not response['success']:
+            return CreateMovieResponse(movie=None, success=False, message=response['error'])
+        
+        create_result = response['data'].get('createMovie', {})
+        return CreateMovieResponse(
+            movie=create_result.get('movie'),
+            success=create_result.get('success', False),
+            message=create_result.get('message', 'Movie operation completed')
+        )
+
+class CreateCinema(Mutation):
+    class Arguments:
+        name = String(required=True)
+        location = String(required=True)
+        capacity = Int(required=True)
+
+    Output = CreateCinemaResponse
+
+    @require_admin
+    def mutate(self, info, current_user, name, location, capacity):
+        query_data = {
+            'query': '''
+            mutation($name: String!, $location: String!, $capacity: Int!) {
+                createCinema(name: $name, location: $location, capacity: $capacity) {
+                    cinema { id name location capacity }
+                    success message
+                }
+            }
+            ''',
+            'variables': {'name': name, 'location': location, 'capacity': capacity}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
         if not result:
-            return CreateCouponResponse(coupon=None, success=False, message="Coupon service unavailable")
+            return CreateCinemaResponse(cinema=None, success=False, message="Cinema service unavailable")
         
         if result.get('errors'):
             error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return CreateCouponResponse(coupon=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+            return CreateCinemaResponse(cinema=None, success=False, message=f"Error: {'; '.join(error_messages)}")
         
-        create_result = result.get('data', {}).get('createCoupon', {})
-        
-        return CreateCouponResponse(
-            coupon=create_result.get('coupon'),
+        create_result = result.get('data', {}).get('createCinema', {})
+        return CreateCinemaResponse(
+            cinema=create_result.get('cinema'),
             success=create_result.get('success', False),
-            message=create_result.get('message', 'Coupon operation completed')
+            message=create_result.get('message', 'Cinema operation completed')
         )
 
 class UseCoupon(Mutation):
@@ -975,20 +964,14 @@ class UseCoupon(Mutation):
             'query': '''
             mutation($code: String!, $booking_amount: Float!) {
                 useCoupon(code: $code, booking_amount: $booking_amount) {
-                    success
-                    message
-                    discount_amount
+                    success message discount_amount
                 }
             }
             ''',
-            'variables': {
-                'code': code,
-                'booking_amount': booking_amount
-            }
+            'variables': {'code': code, 'booking_amount': booking_amount}
         }
         
         result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
-        
         if not result:
             return UseCouponResponse(success=False, message="Coupon service unavailable", discount_amount=0.0)
         
@@ -997,150 +980,16 @@ class UseCoupon(Mutation):
             return UseCouponResponse(success=False, message=f"Error: {'; '.join(error_messages)}", discount_amount=0.0)
         
         use_result = result.get('data', {}).get('useCoupon', {})
-        
         return UseCouponResponse(
             success=use_result.get('success', False),
             message=use_result.get('message', 'Coupon use completed'),
             discount_amount=use_result.get('discount_amount', 0.0)
         )
 
-class UpdateUser(Mutation):
-    class Arguments:
-        id = Int(required=True)
-        username = String()
-        email = String()
-        password = String()
+# ============================================================================
+# SCHEMA DEFINITION
+# ============================================================================
 
-    user = Field(UserType)
-
-    @require_admin
-    def mutate(self, info, current_user, id, username=None, email=None, password=None):
-        query_data = {
-            'query': '''
-            mutation($id: Int!, $username: String, $email: String, $password: String) {
-                updateUser(id: $id, username: $username, email: $email, password: $password) {
-                    id
-                    username
-                    email
-                    role
-                }
-            }
-            ''',
-            'variables': {
-                'id': id,
-                'username': username,
-                'email': email,
-                'password': password
-            }
-        }
-        
-        result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
-        
-        response = handle_service_response(result, 'user')
-        if not response['success']:
-            raise Exception(response['error'])
-        
-        user_result = response['data'].get('updateUser')
-        if not user_result:
-            raise Exception("No updateUser field in user service response")
-        
-        return UpdateUser(user=user_result)
-
-class DeleteUser(Mutation):
-    class Arguments:
-        id = Int(required=True)
-
-    Output = DeleteResponse
-
-    @require_admin
-    def mutate(self, info, current_user, id):
-        query_data = {
-            'query': '''
-            mutation($id: Int!) {
-                deleteUser(id: $id) {
-                    success
-                    message
-                }
-            }
-            ''',
-            'variables': {'id': id}
-        }
-        
-        result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
-        
-        response = handle_service_response(result, 'user')
-        if not response['success']:
-            return DeleteResponse(success=False, message=response['error'])
-        
-        delete_result = response['data'].get('deleteUser', {})
-        
-        return DeleteResponse(
-            success=delete_result.get('success', False),
-            message=delete_result.get('message', 'User deletion completed')
-        )
-
-def safe_get_error_messages(errors):
-    """Safely extract error messages from various error formats"""
-    if not errors:
-        return []
-    
-    error_messages = []
-    for error in errors:
-        if isinstance(error, str):
-            error_messages.append(error)
-        elif isinstance(error, dict):
-            error_messages.append(error.get('message', str(error)))
-        else:
-            error_messages.append(str(error))
-    
-    return error_messages
-
-def handle_service_response(result, service_name, data_key=None):
-    """Centralized service response handler"""
-    if not result:
-        return {
-            'success': False,
-            'error': f"{service_name} service unavailable",
-            'data': None
-        }
-    
-    if result.get('errors'):
-        error_messages = safe_get_error_messages(result['errors'])
-        return {
-            'success': False,
-            'error': f"{service_name} service errors: {'; '.join(error_messages)}",
-            'data': None
-        }
-    
-    data = result.get('data')
-    if not data:
-        return {
-            'success': False,
-            'error': f"No data returned from {service_name} service",
-            'data': None
-        }
-    
-    if data_key:
-        service_data = data.get(data_key)
-        if service_data is None:
-            return {
-                'success': False,
-                'error': f"No {data_key} field in {service_name} service response",
-                'data': None
-            }
-        return {
-            'success': True,
-            'error': None,
-            'data': service_data
-        }
-    
-    return {
-        'success': True,
-        'error': None,
-        'data': data
-    }
-
-# Update the Mutation class to include all mutations
 class Mutation(ObjectType):
     # Public mutations
     register = RegisterUser.Field()
@@ -1155,14 +1004,6 @@ class Mutation(ObjectType):
     
     # Admin mutations
     create_movie = CreateMovie.Field()
-    update_movie = UpdateMovie.Field()
-    delete_movie = DeleteMovie.Field()
     create_cinema = CreateCinema.Field()
-    update_cinema = UpdateCinema.Field()
-    delete_cinema = DeleteCinema.Field()
-    create_coupon = CreateCoupon.Field()
-    delete_user = DeleteUser.Field()
-    update_user = UpdateUser.Field()
 
-# Schema
 schema = Schema(query=Query, mutation=Mutation)

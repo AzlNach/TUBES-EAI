@@ -124,7 +124,7 @@ class UpdateUser(Mutation):
         email = String()
         password = String()
 
-    user = Field(UserType)
+    user = Field(UserType)  # ← Changed back to 'user = Field(UserType)' instead of 'Output = Field(UserType)'
 
     def mutate(self, info, id, username=None, email=None, password=None):
         try:
@@ -141,7 +141,7 @@ class UpdateUser(Mutation):
                 user.set_password(password)
                 
             db.session.commit()
-            return UpdateUser(user=user)
+            return UpdateUser(user=user)  # ← Return wrapped in UpdateUser() class
         except Exception as e:
             db.session.rollback()
             traceback.print_exc()

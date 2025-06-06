@@ -5,15 +5,22 @@ import traceback
 
 class PaymentType(ObjectType):
     id = Int()
-    user_id = Int()
-    booking_id = Int()
+    userId = Int()
+    bookingId = Int()
     amount = Float()
-    payment_method = String()
-    status = String()
-    payment_proof_image = String()
-    created_at = String()
-    updated_at = String()
-    can_be_deleted = Boolean()
+    paymentMethod = String()
+    status = String()  # Virtual field
+    paymentProofImage = String()
+    createdAt = String()
+    updatedAt = String()
+    canBeDeleted = Boolean()
+    
+    def resolve_status(self, info):
+        """Virtual status field - always 'paid' since payment existence means it's paid"""
+        return 'paid'
+    
+    def resolve_canBeDeleted(self, info):
+        return self.can_be_deleted_by_user()
 
 class CreatePaymentResponse(ObjectType):
     payment = Field(PaymentType)
@@ -22,33 +29,48 @@ class CreatePaymentResponse(ObjectType):
 
 class CreatePayment(Mutation):
     class Arguments:
-        user_id = Int(required=True)
-        booking_id = Int(required=True)
+        userId = Int(required=True)
+        bookingId = Int(required=True)
         amount = Float(required=True)
-        payment_method = String()
-        payment_proof_image = String()
+        paymentMethod = String()
+        paymentProofImage = String()
 
     Output = CreatePaymentResponse
 
-    def mutate(self, info, user_id, booking_id, amount, payment_method='CREDIT_CARD', payment_proof_image=None):
+    def mutate(self, info, userId, bookingId, amount, paymentMethod='CREDIT_CARD', paymentProofImage=None):
         try:
-            payment = Payment(
-                user_id=user_id,
-                booking_id=booking_id,
-                amount=amount,
-                payment_method=payment_method,
-                payment_proof_image=payment_proof_image,
-                status='pending'
-            )
-            payment.save()
+            # Check if payment already exists for this booking
+            existing_payment = Payment.get_by_booking(bookingId)
+            if existing_payment:
+                return CreatePaymentResponse(
+                    payment=None,
+                    success=False,
+                    message=f"Payment already exists for booking {bookingId}"
+                )
             
-            return CreatePaymentResponse(
-                payment=payment,
-                success=True,
-                message="Payment created successfully"
+            # Create payment (no status needed - existence = paid)
+            payment = Payment(
+                user_id=userId,
+                booking_id=bookingId,
+                amount=amount,
+                payment_method=paymentMethod,
+                payment_proof_image=paymentProofImage
             )
+            
+            if payment.save():
+                return CreatePaymentResponse(
+                    payment=payment,
+                    success=True,
+                    message="Payment created successfully"
+                )
+            else:
+                return CreatePaymentResponse(
+                    payment=None,
+                    success=False,
+                    message="Failed to save payment"
+                )
+                
         except Exception as e:
-            traceback.print_exc()
             db.session.rollback()
             return CreatePaymentResponse(
                 payment=None,

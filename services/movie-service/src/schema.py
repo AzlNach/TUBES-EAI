@@ -9,7 +9,13 @@ class MovieType(ObjectType):
     genre = String()
     duration = Int()
     description = String()
-    release_date = String()
+    releaseDate = String()  # Changed from release_date to releaseDate
+    
+    def resolve_releaseDate(self, info):
+        # Convert the database field to the expected format
+        if hasattr(self, 'release_date') and self.release_date:
+            return self.release_date.strftime('%Y-%m-%d')
+        return None
 
 class CreateMovieResponse(ObjectType):
     movie = Field(MovieType)
@@ -22,11 +28,11 @@ class CreateMovie(Mutation):
         genre = String(required=True)
         duration = Int(required=True)
         description = String()
-        release_date = String()
+        releaseDate = String()  # ← Changed from release_date to releaseDate
 
     Output = CreateMovieResponse
 
-    def mutate(self, info, title, genre, duration, description=None, release_date=None):
+    def mutate(self, info, title, genre, duration, description=None, releaseDate=None):  # ← Changed parameter name
         try:
             print(f"Creating movie: {title}, {genre}, {duration}")
             
@@ -37,9 +43,9 @@ class CreateMovie(Mutation):
                 description=description
             )
             
-            if release_date:
+            if releaseDate:  # ← Updated variable name
                 try:
-                    movie.release_date = datetime.strptime(release_date, '%Y-%m-%d').date()
+                    movie.release_date = datetime.strptime(releaseDate, '%Y-%m-%d').date()
                 except ValueError:
                     return CreateMovieResponse(
                         movie=None, 
@@ -72,15 +78,19 @@ class UpdateMovie(Mutation):
         genre = String()
         duration = Int()
         description = String()
-        release_date = String()
+        releaseDate = String()
 
-    movie = Field(MovieType)
+    Output = CreateMovieResponse  # ← Change to use CreateMovieResponse
 
-    def mutate(self, info, id, title=None, genre=None, duration=None, description=None, release_date=None):
+    def mutate(self, info, id, title=None, genre=None, duration=None, description=None, releaseDate=None):
         try:
             movie = Movie.query.get(id)
             if not movie:
-                raise Exception(f"Movie with ID {id} not found")
+                return CreateMovieResponse(
+                    movie=None,
+                    success=False,
+                    message=f"Movie with ID {id} not found"
+                )
                 
             if title:
                 movie.title = title
@@ -90,16 +100,30 @@ class UpdateMovie(Mutation):
                 movie.duration = duration
             if description is not None:
                 movie.description = description
-            if release_date:
+            if releaseDate:
                 try:
-                    movie.release_date = datetime.strptime(release_date, '%Y-%m-%d').date()
+                    movie.release_date = datetime.strptime(releaseDate, '%Y-%m-%d').date()
                 except ValueError:
-                    raise Exception("Invalid date format. Use YYYY-MM-DD")
+                    return CreateMovieResponse(
+                        movie=None,
+                        success=False,
+                        message="Invalid date format. Use YYYY-MM-DD"
+                    )
+            
             movie.save()
-            return UpdateMovie(movie=movie)
+            return CreateMovieResponse(
+                movie=movie,
+                success=True,
+                message="Movie updated successfully"
+            )
         except Exception as e:
             db.session.rollback()
-            raise Exception(f"Error updating movie: {str(e)}")
+            traceback.print_exc()
+            return CreateMovieResponse(
+                movie=None,
+                success=False,
+                message=f"Error updating movie: {str(e)}"
+            )
 
 class DeleteMovieResponse(ObjectType):
     success = Boolean()

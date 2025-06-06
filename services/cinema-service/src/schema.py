@@ -46,25 +46,45 @@ class UpdateCinema(Mutation):
         location = String()
         capacity = Int()
 
-    cinema = Field(CinemaType)
+    Output = CreateCinemaResponse  # Change to use CreateCinemaResponse instead of just cinema field
 
     def mutate(self, info, id, name=None, location=None, capacity=None):
         try:
+            print(f"Cinema Service: Updating cinema ID {id}")  # Debug log
             cinema = Cinema.query.get(id)
             if not cinema:
-                raise Exception(f"Cinema with ID {id} not found")
+                print(f"Cinema Service: Cinema with ID {id} not found")  # Debug log
+                return CreateCinemaResponse(
+                    cinema=None,
+                    success=False,
+                    message=f"Cinema with ID {id} not found"
+                )
                 
+            print(f"Cinema Service: Found cinema: {cinema}")  # Debug log
+            
             if name:
                 cinema.name = name
             if location:
                 cinema.location = location
             if capacity:
                 cinema.capacity = capacity
+                
             cinema.save()
-            return UpdateCinema(cinema=cinema)
+            print(f"Cinema Service: Cinema updated successfully")  # Debug log
+            return CreateCinemaResponse(
+                cinema=cinema,
+                success=True,
+                message="Cinema updated successfully"
+            )
         except Exception as e:
+            print(f"Cinema Service: Error updating cinema: {str(e)}")  # Debug log
             db.session.rollback()
-            raise Exception(f"Error updating cinema: {str(e)}")
+            traceback.print_exc()
+            return CreateCinemaResponse(
+                cinema=None,
+                success=False,
+                message=f"Error updating cinema: {str(e)}"
+            )
 
 class DeleteCinemaResponse(ObjectType):
     success = Boolean()
