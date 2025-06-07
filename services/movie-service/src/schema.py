@@ -1,4 +1,4 @@
-from graphene import ObjectType, String, Int, List, Field, Mutation, Schema, Boolean
+from graphene import ObjectType, String, Int, List, Field, Mutation, Schema, Boolean, Float
 from models import Movie, db
 from datetime import datetime
 import traceback
@@ -10,12 +10,18 @@ class MovieType(ObjectType):
     duration = Int()
     description = String()
     releaseDate = String()  # Changed from release_date to releaseDate
+    posterUrl = String()    # Added poster URL
+    rating = Float()        # Added rating
     
     def resolve_releaseDate(self, info):
         # Convert the database field to the expected format
         if hasattr(self, 'release_date') and self.release_date:
             return self.release_date.strftime('%Y-%m-%d')
         return None
+    
+    def resolve_posterUrl(self, info):
+        # Convert snake_case to camelCase
+        return getattr(self, 'poster_url', None)
 
 class CreateMovieResponse(ObjectType):
     movie = Field(MovieType)
@@ -28,11 +34,13 @@ class CreateMovie(Mutation):
         genre = String(required=True)
         duration = Int(required=True)
         description = String()
-        releaseDate = String()  # ← Changed from release_date to releaseDate
+        releaseDate = String()  # Changed from release_date to releaseDate
+        posterUrl = String()    # Added poster URL
+        rating = Float()        # Added rating
 
     Output = CreateMovieResponse
 
-    def mutate(self, info, title, genre, duration, description=None, releaseDate=None):  # ← Changed parameter name
+    def mutate(self, info, title, genre, duration, description=None, releaseDate=None, posterUrl=None, rating=None):
         try:
             print(f"Creating movie: {title}, {genre}, {duration}")
             
@@ -40,10 +48,12 @@ class CreateMovie(Mutation):
                 title=title, 
                 genre=genre, 
                 duration=duration, 
-                description=description
+                description=description,
+                poster_url=posterUrl,  # Map camelCase to snake_case
+                rating=rating
             )
             
-            if releaseDate:  # ← Updated variable name
+            if releaseDate:
                 try:
                     movie.release_date = datetime.strptime(releaseDate, '%Y-%m-%d').date()
                 except ValueError:
@@ -52,6 +62,14 @@ class CreateMovie(Mutation):
                         success=False, 
                         message="Invalid date format. Use YYYY-MM-DD"
                     )
+            
+            # Validate rating range
+            if rating is not None and (rating < 0 or rating > 10):
+                return CreateMovieResponse(
+                    movie=None,
+                    success=False,
+                    message="Rating must be between 0 and 10"
+                )
             
             movie.save()
             print(f"Movie saved successfully: {movie}")
@@ -79,10 +97,12 @@ class UpdateMovie(Mutation):
         duration = Int()
         description = String()
         releaseDate = String()
+        posterUrl = String()    # Added poster URL
+        rating = Float()        # Added rating
 
-    Output = CreateMovieResponse  # ← Change to use CreateMovieResponse
+    Output = CreateMovieResponse  # Change to use CreateMovieResponse
 
-    def mutate(self, info, id, title=None, genre=None, duration=None, description=None, releaseDate=None):
+    def mutate(self, info, id, title=None, genre=None, duration=None, description=None, releaseDate=None, posterUrl=None, rating=None):
         try:
             movie = Movie.query.get(id)
             if not movie:
@@ -100,6 +120,17 @@ class UpdateMovie(Mutation):
                 movie.duration = duration
             if description is not None:
                 movie.description = description
+            if posterUrl is not None:
+                movie.poster_url = posterUrl  # Map camelCase to snake_case
+            if rating is not None:
+                # Validate rating range
+                if rating < 0 or rating > 10:
+                    return CreateMovieResponse(
+                        movie=None,
+                        success=False,
+                        message="Rating must be between 0 and 10"
+                    )
+                movie.rating = rating
             if releaseDate:
                 try:
                     movie.release_date = datetime.strptime(releaseDate, '%Y-%m-%d').date()

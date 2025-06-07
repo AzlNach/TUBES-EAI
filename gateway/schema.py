@@ -2,7 +2,7 @@ import graphene
 import requests
 import json
 import os
-from graphene import ObjectType, String, Int, Float, List, Field, Mutation, Schema, Boolean
+from graphene import ObjectType, String, Int, Float, List, Field, Mutation, Schema, Boolean, JSONString, DateTime
 from functools import wraps
 
 # Service URLs
@@ -167,12 +167,39 @@ class MovieType(ObjectType):
     duration = Int()
     description = String()
     releaseDate = String()
+    posterUrl = String()    # Added poster URL
+    rating = Float()        # Added rating
 
 class CinemaType(ObjectType):
     id = Int()
     name = String()
-    location = String()
+    city = String()  # Changed from location to city
     capacity = Int()
+    auditoriums = List(lambda: AuditoriumType)
+
+class AuditoriumType(ObjectType):
+    id = Int()
+    cinema_id = Int()
+    name = String()
+    seat_layout = JSONString()
+    cinema = Field(CinemaType)
+    
+class ShowtimeType(ObjectType):
+    id = Int()
+    movie_id = Int()
+    auditorium_id = Int()
+    start_time = DateTime()
+    price = Float()
+    auditorium = Field(AuditoriumType)
+
+class SeatStatusType(ObjectType):
+    id = Int()
+    showtime_id = Int()
+    seat_number = String()
+    status = String()
+    booking_id = Int()
+    updated_at = DateTime()
+    
 
 class BookingType(ObjectType):
     """Booking type - disesuaikan dengan booking service schema"""
@@ -234,6 +261,21 @@ class CreateCinemaResponse(ObjectType):
     success = Boolean()
     message = String()
 
+class CreateAuditoriumResponse(ObjectType):
+    auditorium = Field(AuditoriumType)
+    success = Boolean()
+    message = String()
+
+class CreateShowtimeResponse(ObjectType):
+    showtime = Field(ShowtimeType)
+    success = Boolean()
+    message = String()
+
+class UpdateSeatStatusResponse(ObjectType):
+    seat_status = Field(SeatStatusType)
+    success = Boolean()
+    message = String()
+
 class CreateBookingResponse(ObjectType):
     booking = Field(BookingType)
     success = Boolean()
@@ -280,6 +322,9 @@ class Query(ObjectType):
     # User authenticated queries
     movies = List(MovieType)
     cinemas = List(CinemaType)
+    auditoriums = List(AuditoriumType, cinema_id=Int())
+    showtimes = List(ShowtimeType, movie_id=Int(), auditorium_id=Int())
+    seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))
     coupons = List(CouponType)          # ← Tambahkan ini untuk admin
     availableCoupons = List(CouponType)
     my_bookings = List(BookingType)
@@ -310,7 +355,7 @@ class Query(ObjectType):
 
     @require_auth
     def resolve_cinemas(self, info, current_user):
-        query_data = {'query': '{ cinemas { id name location capacity } }'}
+        query_data = {'query': '{ cinemas { id name city capacity auditoriums { id name seat_layout } } }'}
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
         
         response = handle_service_response(result, 'cinema', 'cinemas')
@@ -446,15 +491,20 @@ class Query(ObjectType):
 
     @require_auth
     def resolve_cinema(self, info, current_user, id):
-        """Get single cinema by ID"""
+        """Get single cinema by ID with auditoriums"""
         query_data = {
             'query': f'''
             {{
                 cinema(id: {id}) {{
                     id
                     name
-                    location
+                    city
                     capacity
+                    auditoriums {{
+                        id
+                        name
+                        seat_layout
+                    }}
                 }}
             }}
             '''
@@ -471,7 +521,115 @@ class Query(ObjectType):
             raise Exception(f"Cinema with ID {id} not found")
         
         return cinema_data
-
+    
+    @require_auth
+    def resolve_auditoriums(self, info, current_user, cinema_id=None):
+        if cinema_id:
+            query_data = {
+                'query': f'''
+                {{
+                    auditoriumsByCinema(cinemaId: {cinema_id}) {{
+                        id
+                        cinema_id
+                        name
+                        seat_layout
+                        cinema {{
+                            id
+                            name
+                            city
+                        }}
+                    }}
+                }}
+                '''
+            }
+            data_key = 'auditoriumsByCinema'
+        else:
+            query_data = {'query': '{ auditoriums { id cinema_id name seat_layout } }'}
+            data_key = 'auditoriums'
+            
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', data_key)
+        if not response['success']:
+            raise Exception(response['error'])
+        return response['data']
+    
+    @require_auth
+    def resolve_showtimes(self, info, current_user, movie_id=None, auditorium_id=None):
+        if movie_id:
+            query_data = {
+                'query': f'''
+                {{
+                    showtimesByMovie(movieId: {movie_id}) {{
+                        id
+                        movie_id
+                        auditorium_id
+                        start_time
+                        price
+                        auditorium {{
+                            id
+                            name
+                            cinema {{
+                                id
+                                name
+                                city
+                            }}
+                        }}
+                    }}
+                }}
+                '''
+            }
+            data_key = 'showtimesByMovie'
+        elif auditorium_id:
+            query_data = {
+                'query': f'''
+                {{
+                    showtimesByAuditorium(auditoriumId: {auditorium_id}) {{
+                        id
+                        movie_id
+                        auditorium_id
+                        start_time
+                        price
+                    }}
+                }}
+                '''
+            }
+            data_key = 'showtimesByAuditorium'
+        else:
+            query_data = {'query': '{ showtimes { id movie_id auditorium_id start_time price } }'}
+            data_key = 'showtimes'
+            
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', data_key)
+        if not response['success']:
+            raise Exception(response['error'])
+        return response['data']
+    
+    @require_auth
+    def resolve_seat_statuses(self, info, current_user, showtime_id):
+        query_data = {
+            'query': f'''
+            {{
+                seatStatuses(showtimeId: {showtime_id}) {{
+                    id
+                    showtime_id
+                    seat_number
+                    status
+                    booking_id
+                    updated_at
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', 'seatStatuses')
+        if not response['success']:
+            raise Exception(response['error'])
+        return response['data']
+    
     @require_auth
     def resolve_user(self, info, current_user, id):
         """Get single user by ID - users can only see their own profile, admins can see any"""
@@ -1146,17 +1304,19 @@ class CreateMovie(Mutation):
         duration = Int(required=True)
         description = String()
         releaseDate = String()
+        posterUrl = String()    # Added poster URL
+        rating = Float()        # Added rating
 
     Output = CreateMovieResponse
 
     @require_admin
-    def mutate(self, info, current_user, title, genre, duration, description=None, releaseDate=None):
+    def mutate(self, info, current_user, title, genre, duration, description=None, releaseDate=None, posterUrl=None, rating=None):
         query_data = {
             'query': '''
-            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $releaseDate: String) {
-                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate) {
+            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $releaseDate: String, $posterUrl: String, $rating: Float) {
+                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate, posterUrl: $posterUrl, rating: $rating) {
                     movie {
-                        id title genre duration description releaseDate
+                        id title genre duration description releaseDate posterUrl rating
                     }
                     success message
                 }
@@ -1164,7 +1324,8 @@ class CreateMovie(Mutation):
             ''',
             'variables': {
                 'title': title, 'genre': genre, 'duration': duration,
-                'description': description, 'releaseDate': releaseDate
+                'description': description, 'releaseDate': releaseDate,
+                'posterUrl': posterUrl, 'rating': rating
             }
         }
         
@@ -1279,23 +1440,23 @@ class DeleteMovie(Mutation):
 class CreateCinema(Mutation):
     class Arguments:
         name = String(required=True)
-        location = String(required=True)
+        city = String(required=True)  # Changed from location to city
         capacity = Int(required=True)
 
     Output = CreateCinemaResponse
 
     @require_admin
-    def mutate(self, info, current_user, name, location, capacity):
+    def mutate(self, info, current_user, name, city, capacity):
         query_data = {
             'query': '''
-            mutation($name: String!, $location: String!, $capacity: Int!) {
-                createCinema(name: $name, location: $location, capacity: $capacity) {
-                    cinema { id name location capacity }
+            mutation($name: String!, $city: String!, $capacity: Int!) {
+                createCinema(name: $name, city: $city, capacity: $capacity) {
+                    cinema { id name city capacity }
                     success message
                 }
             }
             ''',
-            'variables': {'name': name, 'location': location, 'capacity': capacity}
+            'variables': {'name': name, 'city': city, 'capacity': capacity}
         }
         
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
@@ -1353,21 +1514,21 @@ class UpdateCinema(Mutation):
     class Arguments:
         id = Int(required=True)
         name = String()
-        location = String()
+        city = String()  # Changed from location to city
         capacity = Int()
 
     Output = UpdateCinemaResponse
 
     @require_admin
-    def mutate(self, info, current_user, id, name=None, location=None, capacity=None):
+    def mutate(self, info, current_user, id, name=None, city=None, capacity=None):
         query_data = {
             'query': '''
-            mutation($id: Int!, $name: String, $location: String, $capacity: Int) {
-                updateCinema(id: $id, name: $name, location: $location, capacity: $capacity) {
+            mutation($id: Int!, $name: String, $city: String, $capacity: Int) {
+                updateCinema(id: $id, name: $name, city: $city, capacity: $capacity) {
                     cinema {
                         id
                         name
-                        location
+                        city
                         capacity
                     }
                     success
@@ -1378,7 +1539,7 @@ class UpdateCinema(Mutation):
             'variables': {
                 'id': id,
                 'name': name,
-                'location': location,
+                'city': city,
                 'capacity': capacity
             }
         }
@@ -1401,6 +1562,451 @@ class UpdateCinema(Mutation):
             cinema=update_result.get('cinema'),
             success=update_result.get('success', False),
             message=update_result.get('message', 'Cinema update completed')
+        )
+
+class CreateAuditorium(Mutation):
+    class Arguments:
+        cinema_id = Int(required=True)
+        name = String(required=True)
+        seat_layout = JSONString()
+
+    Output = CreateAuditoriumResponse
+
+    @require_admin
+    def mutate(self, info, current_user, cinema_id, name, seat_layout=None):
+        
+        if isinstance(seat_layout, dict):
+            seat_layout = json.dumps(seat_layout)
+            
+        query_data = {
+            'query': '''
+            mutation($cinemaId: Int!, $name: String!, $seatLayout: JSONString) {
+                createAuditorium(cinemaId: $cinemaId, name: $name, seatLayout: $seatLayout) {
+                    auditorium { 
+                        id 
+                        cinemaId 
+                        name 
+                        seatLayout 
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {'cinemaId': cinema_id, 'name': name, 'seatLayout': seat_layout}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateAuditoriumResponse(auditorium=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            return CreateAuditoriumResponse(auditorium=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        create_result = result.get('data', {}).get('createAuditorium', {})
+        auditorium_data = create_result.get('auditorium')
+        if auditorium_data:
+            # Transform camelCase response to snake_case for gateway AuditoriumType
+            transformed_auditorium = {
+                'id': auditorium_data.get('id'),
+                'cinema_id': auditorium_data.get('cinemaId'),  # Transform camelCase to snake_case
+                'name': auditorium_data.get('name'),
+                'seat_layout': auditorium_data.get('seatLayout'),  # Transform camelCase to snake_case
+                'cinema': auditorium_data.get('cinema')
+            }
+            
+            return CreateAuditoriumResponse(
+                auditorium=transformed_auditorium,
+                success=create_result.get('success', False),
+                message=create_result.get('message', 'Auditorium operation completed')
+            )
+        
+        return CreateAuditoriumResponse(
+            auditorium=None,
+            success=create_result.get('success', False),
+            message=create_result.get('message', 'Auditorium operation completed')
+        )
+
+class UpdateAuditorium(Mutation):
+    class Arguments:
+        id = Int(required=True)
+        cinema_id = Int()
+        name = String()
+        seat_layout = JSONString()
+
+    Output = CreateAuditoriumResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id, cinema_id=None, name=None, seat_layout=None):
+        
+        if isinstance(seat_layout, dict):
+            seat_layout = json.dumps(seat_layout)
+            
+        query_data = {
+            'query': '''
+            mutation($id: Int!, $cinemaId: Int, $name: String, $seatLayout: JSONString) {
+                updateAuditorium(id: $id, cinemaId: $cinemaId, name: $name, seatLayout: $seatLayout) {
+                    auditorium { 
+                        id 
+                        cinemaId 
+                        name 
+                        seatLayout 
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': id,
+                'cinemaId': cinema_id, 
+                'name': name, 
+                'seatLayout': seat_layout
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateAuditoriumResponse(auditorium=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            return CreateAuditoriumResponse(auditorium=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateAuditorium', {})
+        auditorium_data = update_result.get('auditorium')
+        if auditorium_data:
+            # Transform camelCase response to snake_case for gateway AuditoriumType
+            transformed_auditorium = {
+                'id': auditorium_data.get('id'),
+                'cinema_id': auditorium_data.get('cinemaId'),  # Transform camelCase to snake_case
+                'name': auditorium_data.get('name'),
+                'seat_layout': auditorium_data.get('seatLayout'),  # Transform camelCase to snake_case
+                'cinema': auditorium_data.get('cinema')
+            }
+            
+            return CreateAuditoriumResponse(
+                auditorium=transformed_auditorium,
+                success=update_result.get('success', False),
+                message=update_result.get('message', 'Auditorium update completed')
+            )
+        
+        return CreateAuditoriumResponse(
+            auditorium=None,
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Auditorium update completed')
+        )
+
+class DeleteAuditorium(Mutation):
+    class Arguments:
+        id = Int(required=True)
+
+    Output = DeleteResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id):
+        query_data = {
+            'query': '''
+            mutation($id: Int!) {
+                deleteAuditorium(id: $id) {
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {'id': id}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return DeleteResponse(success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        delete_result = result.get('data', {}).get('deleteAuditorium', {})
+        return DeleteResponse(
+            success=delete_result.get('success', False),
+            message=delete_result.get('message', 'Auditorium deletion completed')
+        )
+        
+class CreateShowtime(Mutation):
+    class Arguments:
+        movieId = Int(required=True)  # Changed to camelCase
+        auditoriumId = Int(required=True)  # Changed to camelCase
+        startTime = DateTime(required=True)  # Changed to camelCase
+        price = Float(required=True)
+
+    Output = CreateShowtimeResponse
+
+    @require_admin
+    def mutate(self, info, current_user, movieId, auditoriumId, startTime, price):
+        query_data = {
+            'query': '''
+            mutation($movieId: Int!, $auditoriumId: Int!, $startTime: DateTime!, $price: Float!) {
+                createShowtime(movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
+                    showtime { 
+                        id 
+                        movieId 
+                        auditoriumId 
+                        startTime 
+                        price
+                        auditorium {
+                            id
+                            name
+                            cinema {
+                                id
+                                name
+                                city
+                            }
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'movieId': movieId, 
+                'auditoriumId': auditoriumId, 
+                'startTime': startTime.isoformat(), 
+                'price': price
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateShowtimeResponse(showtime=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            return CreateShowtimeResponse(showtime=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        create_result = result.get('data', {}).get('createShowtime', {})
+        
+        # Transform camelCase response to snake_case for gateway ShowtimeType
+        showtime_data = create_result.get('showtime')
+        if showtime_data:
+            transformed_showtime = {
+                'id': showtime_data.get('id'),
+                'movie_id': showtime_data.get('movieId'),  # Transform camelCase to snake_case
+                'auditorium_id': showtime_data.get('auditoriumId'),  # Transform camelCase to snake_case
+                'start_time': showtime_data.get('startTime'),  # Transform camelCase to snake_case
+                'price': showtime_data.get('price'),
+                'auditorium': showtime_data.get('auditorium')
+            }
+            
+            return CreateShowtimeResponse(
+                showtime=transformed_showtime,
+                success=create_result.get('success', False),
+                message=create_result.get('message', 'Showtime operation completed')
+            )
+        
+        return CreateShowtimeResponse(
+            showtime=None,
+            success=create_result.get('success', False),
+            message=create_result.get('message', 'Showtime operation completed')
+        )
+        
+class UpdateShowtime(Mutation):
+    class Arguments:
+        id = Int(required=True)
+        movieId = Int()  # Changed to camelCase
+        auditoriumId = Int()  # Changed to camelCase
+        startTime = DateTime()  # Changed to camelCase
+        price = Float()
+
+    Output = CreateShowtimeResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id, movieId=None, auditoriumId=None, startTime=None, price=None):
+        # Convert startTime to ISO format if provided
+        start_time_iso = startTime.isoformat() if startTime else None
+        
+        query_data = {
+            'query': '''
+            mutation($id: Int!, $movieId: Int, $auditoriumId: Int, $startTime: DateTime, $price: Float) {
+                updateShowtime(id: $id, movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
+                    showtime { 
+                        id 
+                        movieId 
+                        auditoriumId 
+                        startTime 
+                        price
+                        auditorium {
+                            id
+                            name
+                            cinema {
+                                id
+                                name
+                                city
+                            }
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': id,
+                'movieId': movieId, 
+                'auditoriumId': auditoriumId, 
+                'startTime': start_time_iso, 
+                'price': price
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateShowtimeResponse(showtime=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return CreateShowtimeResponse(showtime=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateShowtime', {})
+        
+        # Transform camelCase response to snake_case for gateway ShowtimeType
+        showtime_data = update_result.get('showtime')
+        if showtime_data:
+            transformed_showtime = {
+                'id': showtime_data.get('id'),
+                'movie_id': showtime_data.get('movieId'),  # Transform camelCase to snake_case
+                'auditorium_id': showtime_data.get('auditoriumId'),  # Transform camelCase to snake_case
+                'start_time': showtime_data.get('startTime'),  # Transform camelCase to snake_case
+                'price': showtime_data.get('price'),
+                'auditorium': showtime_data.get('auditorium')
+            }
+            
+            return CreateShowtimeResponse(
+                showtime=transformed_showtime,
+                success=update_result.get('success', False),
+                message=update_result.get('message', 'Showtime update completed')
+            )
+        
+        return CreateShowtimeResponse(
+            showtime=None,
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Showtime update completed')
+        )
+
+class DeleteShowtime(Mutation):
+    class Arguments:
+        id = Int(required=True)
+
+    Output = DeleteResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id):
+        query_data = {
+            'query': '''
+            mutation($id: Int!) {
+                deleteShowtime(id: $id) {
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {'id': id}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return DeleteResponse(success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        delete_result = result.get('data', {}).get('deleteShowtime', {})
+        return DeleteResponse(
+            success=delete_result.get('success', False),
+            message=delete_result.get('message', 'Showtime deletion completed')
+        )
+
+class UpdateSeatStatus(Mutation):
+    class Arguments:
+        showtime_id = Int(required=True)
+        seat_number = String(required=True)
+        status = String(required=True)
+        booking_id = Int()
+
+    Output = UpdateSeatStatusResponse
+
+    @require_auth
+    def mutate(self, info, current_user, showtime_id, seat_number, status, booking_id=None):
+        query_data = {
+            'query': '''
+            mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
+                updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
+                    seatStatus { 
+                        id 
+                        showtime_id 
+                        seat_number 
+                        status
+                        booking_id
+                        updated_at
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'showtimeId': showtime_id,
+                'seatNumber': seat_number,
+                'status': status,
+                'bookingId': booking_id
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return UpdateSeatStatusResponse(seat_status=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return UpdateSeatStatusResponse(seat_status=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateSeatStatus', {})
+        return UpdateSeatStatusResponse(
+            seat_status=update_result.get('seatStatus'),
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Seat status update completed')
         )
 
 class DeleteCinema(Mutation):
@@ -1462,6 +2068,14 @@ class Mutation(ObjectType):
     create_cinema = CreateCinema.Field()
     update_cinema = UpdateCinema.Field()
     delete_cinema = DeleteCinema.Field()
+    create_auditorium = CreateAuditorium.Field()
+    update_auditorium = UpdateAuditorium.Field()  
+    delete_auditorium = DeleteAuditorium.Field() 
+    create_showtime = CreateShowtime.Field()
+    update_showtime = UpdateShowtime.Field() 
+    delete_showtime = DeleteShowtime.Field()
     delete_user = DeleteUser.Field()
+    
+    update_seat_status = UpdateSeatStatus.Field()
 
 schema = Schema(query=Query, mutation=Mutation)
