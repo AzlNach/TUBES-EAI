@@ -2385,7 +2385,7 @@ class DeleteBooking(Mutation):
 
 class CreatePayment(Mutation):
     class Arguments:
-        amount = Float(required=True)
+        # Removed amount from required arguments - will be calculated automatically
         bookingId = Int(required=True)
         paymentMethod = String()
         paymentProofImage = String()
@@ -2393,7 +2393,7 @@ class CreatePayment(Mutation):
     Output = CreatePaymentResponse
 
     @require_auth
-    def mutate(self, info, current_user, amount, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None):
+    def mutate(self, info, current_user, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None):
         # Step 1: Validate booking exists and get booking details
         booking_check_query = {
             'query': f'''
@@ -2439,7 +2439,82 @@ class CreatePayment(Mutation):
                 message=f"Booking is already {booking_data['status']}"
             )
 
-        # Step 2: Create payment
+        # Step 2: Get showtime details to calculate amount automatically
+        showtime_query = {
+            'query': f'''
+            {{
+                showtime(id: {booking_data['showtimeId']}) {{
+                    id
+                    movieId
+                    auditoriumId
+                    startTime
+                    price
+                }}
+            }}
+            '''
+        }
+        
+        showtime_result = make_service_request(SERVICE_URLS['cinema'], showtime_query, 'cinema')
+        if not showtime_result or showtime_result.get('errors'):
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Failed to get showtime details for amount calculation"
+            )
+        
+        showtime_data = showtime_result.get('data', {}).get('showtime')
+        if not showtime_data:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Showtime not found for amount calculation"
+            )
+
+        # Step 3: Get reserved seats count to calculate total amount
+        seat_status_query = {
+            'query': f'''
+            {{
+                seatStatuses(showtimeId: {booking_data['showtimeId']}) {{
+                    seatNumber
+                    status
+                    bookingId
+                }}
+            }}
+            '''
+        }
+        
+        seat_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+        if not seat_result or seat_result.get('errors'):
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Failed to get seat information for amount calculation"
+            )
+
+        reserved_seats = []
+        seat_statuses = seat_result.get('data', {}).get('seatStatuses', [])
+        
+        # Find seats that are reserved for this booking
+        for seat_status in seat_statuses:
+            if (seat_status.get('status') == 'RESERVED' and 
+                seat_status.get('bookingId') == bookingId):
+                reserved_seats.append(seat_status['seatNumber'])
+
+        if not reserved_seats:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="No reserved seats found for this booking"
+            )
+
+        # Step 4: Calculate amount automatically (seat count × showtime price)
+        showtime_price = float(showtime_data.get('price', 0))
+        seat_count = len(reserved_seats)
+        calculated_amount = showtime_price * seat_count
+        
+        print(f"Payment calculation: {seat_count} seats × {showtime_price} = {calculated_amount}")  # Debug log
+
+        # Step 5: Create payment with calculated amount (status starts as 'pending')
         payment_query = {
             'query': '''
             mutation($amount: Float!, $userId: Int!, $bookingId: Int!, $paymentMethod: String!, $paymentProofImage: String) {
@@ -2450,6 +2525,7 @@ class CreatePayment(Mutation):
                         bookingId
                         amount
                         paymentMethod
+                        status
                         paymentProofImage
                         createdAt
                         updatedAt
@@ -2460,7 +2536,7 @@ class CreatePayment(Mutation):
             }
             ''',
             'variables': {
-                'amount': amount,
+                'amount': calculated_amount,
                 'userId': current_user['user_id'],
                 'bookingId': bookingId,
                 'paymentMethod': paymentMethod,
@@ -2497,7 +2573,44 @@ class CreatePayment(Mutation):
                 message=payment_data.get('message', 'Failed to create payment')
             )
 
-        # Step 3: Update booking status to PAID
+        payment_service_data = payment_data.get('payment')
+        payment_id = payment_service_data.get('id') if payment_service_data else None
+
+        if not payment_id:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Payment created but ID not returned"
+            )
+
+        # Step 6: AUTOMATICALLY update payment status to 'success' (system-driven)
+        print(f"Automatically updating payment {payment_id} status to 'success'")  # Debug log
+        
+        status_update_query = {
+            'query': '''
+            mutation($id: Int!, $status: String!) {
+                updatePaymentStatus(id: $id, status: $status) {
+                    payment {
+                        id
+                        status
+                    }
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': payment_id,
+                'status': 'success'
+            }
+        }
+        
+        status_update_result = make_service_request(SERVICE_URLS['payment'], status_update_query, 'payment')
+        print(f"Payment status update result: {status_update_result}")  # Debug log
+
+        # Step 7: AUTOMATICALLY update booking status to 'PAID' (system-driven)
+        print(f"Automatically updating booking {bookingId} status to 'PAID'")  # Debug log
+        
         booking_update_query = {
             'query': '''
             mutation($id: Int!, $status: String!) {
@@ -2518,113 +2631,81 @@ class CreatePayment(Mutation):
         }
         
         booking_update_result = make_service_request(SERVICE_URLS['booking'], booking_update_query, 'booking')
+        print(f"Booking status update result: {booking_update_result}")  # Debug log
         
-        # Step 4: Get reserved seats and create tickets automatically
-        showtime_query = {
-            'query': f'''
-            {{
-                seatStatuses(showtimeId: {booking_data['showtimeId']}) {{
-                    seatNumber
-                    status
-                    bookingId
-                }}
-            }}
-            '''
-        }
-        
-        seat_result = make_service_request(SERVICE_URLS['cinema'], showtime_query, 'cinema')
-        if seat_result and not seat_result.get('errors'):
-            reserved_seats = []
-            seat_statuses = seat_result.get('data', {}).get('seatStatuses', [])
+        # Step 8: Create tickets for reserved seats automatically
+        if reserved_seats:
+            ticket_query = {
+                'query': '''
+                mutation($bookingId: Int!, $seatNumbers: [String!]!) {
+                    createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
+                        tickets {
+                            id
+                            bookingId
+                            seatNumber
+                        }
+                        success
+                        message
+                    }
+                }
+                ''',
+                'variables': {
+                    'bookingId': bookingId,
+                    'seatNumbers': reserved_seats
+                }
+            }
             
-            # Find seats that are reserved for this booking
-            for seat_status in seat_statuses:
-                if (seat_status.get('status') == 'RESERVED' and 
-                    seat_status.get('bookingId') == bookingId):
-                    reserved_seats.append(seat_status['seatNumber'])
+            ticket_result = make_service_request(SERVICE_URLS['booking'], ticket_query, 'booking')
+            print(f"Ticket creation result: {ticket_result}")  # Debug log
             
-            print(f"Found reserved seats for booking {bookingId}: {reserved_seats}")  # Debug log
-            
-            # Create tickets for reserved seats automatically
-            if reserved_seats:
-                ticket_query = {
+            # Update seat statuses from RESERVED to BOOKED after creating tickets
+            for seat_number in reserved_seats:
+                seat_update_query = {
                     'query': '''
-                    mutation($bookingId: Int!, $seatNumbers: [String!]!) {
-                        createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
-                            tickets {
-                                id
-                                bookingId
-                                seatNumber
-                            }
+                    mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
+                        updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
                             success
                             message
                         }
                     }
                     ''',
                     'variables': {
-                        'bookingId': bookingId,
-                        'seatNumbers': reserved_seats
+                        'showtimeId': booking_data['showtimeId'],
+                        'seatNumber': seat_number,
+                        'status': 'BOOKED',
+                        'bookingId': bookingId
                     }
                 }
                 
-                ticket_result = make_service_request(SERVICE_URLS['booking'], ticket_query, 'booking')
-                print(f"Ticket creation result: {ticket_result}")  # Debug log
-                
-                # Update seat statuses from RESERVED to BOOKED after creating tickets
-                for seat_number in reserved_seats:
-                    seat_update_query = {
-                        'query': '''
-                        mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
-                            updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
-                                success
-                                message
-                            }
-                        }
-                        ''',
-                        'variables': {
-                            'showtimeId': booking_data['showtimeId'],
-                            'seatNumber': seat_number,
-                            'status': 'BOOKED',  # Change from RESERVED to BOOKED
-                            'bookingId': bookingId
-                        }
-                    }
-                    
-                    make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
-            else:
-                print(f"No reserved seats found for booking {bookingId}")
+                make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
 
-        # Step 5: Transform payment data properly
-        payment_service_data = payment_data.get('payment')
-        print(f"Raw payment service data: {payment_service_data}")
-
+        # Step 9: Transform payment data properly with final status
         if payment_service_data:
-            # Transform ensuring all fields are mapped correctly with explicit fallbacks
             transformed_payment = {
                 'id': payment_service_data.get('id'),
                 'userId': payment_service_data.get('userId') or current_user['user_id'],
-                'bookingId': payment_service_data.get('bookingId') or bookingId,  # Explicit fallback
-                'amount': payment_service_data.get('amount') or amount,
+                'bookingId': payment_service_data.get('bookingId') or bookingId,
+                'amount': payment_service_data.get('amount') or calculated_amount,
                 'paymentMethod': payment_service_data.get('paymentMethod') or paymentMethod,
-                'status': 'PAID',  # All successful payments are PAID
+                'status': 'success',  # Set final status to success
                 'paymentProofImage': payment_service_data.get('paymentProofImage') or paymentProofImage,
                 'createdAt': payment_service_data.get('createdAt'),
                 'updatedAt': payment_service_data.get('updatedAt'),
-                'canBeDeleted': payment_service_data.get('canBeDeleted', True)
+                'canBeDeleted': False  # Success payments cannot be deleted
             }
             
-            print(f"Transformed payment: {transformed_payment}")
+            print(f"Final transformed payment: {transformed_payment}")
             
             return CreatePaymentResponse(
                 payment=transformed_payment,
                 success=True,
-                message="Payment successful and tickets created automatically"
+                message=f"Payment successful! Amount: {seat_count} seats × ${showtime_price:,.0f} = ${calculated_amount:,.0f}. Payment status: SUCCESS, Booking status: PAID. Tickets created automatically."
             )
         else:
-            print(f"No payment data found in response: {payment_data}")
             return CreatePaymentResponse(
                 payment=None,
-                success=payment_data.get('success', False),
-                message=payment_data.get('message', 'Payment creation completed but no payment data returned')
+                success=False,
+                message="Payment processing completed but data not available"
             )
 
 class DeletePayment(Mutation):

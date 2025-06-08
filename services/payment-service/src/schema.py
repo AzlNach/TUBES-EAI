@@ -9,18 +9,16 @@ class PaymentType(ObjectType):
     bookingId = Int()
     amount = Float()
     paymentMethod = String()
-    status = String()  # Dynamic status based on booking
+    status = String()  # pending, success, failed
     paymentProofImage = String()
     createdAt = String()
     updatedAt = String()
     canBeDeleted = Boolean()
     
-    # Add field resolvers to properly map snake_case database fields to camelCase GraphQL fields
     def resolve_userId(self, info):
         return self.user_id if hasattr(self, 'user_id') else getattr(self, 'userId', None)
     
     def resolve_bookingId(self, info):
-        # This is the critical fix - map booking_id to bookingId
         return self.booking_id if hasattr(self, 'booking_id') else getattr(self, 'bookingId', None)
         
     def resolve_paymentMethod(self, info):
@@ -39,53 +37,60 @@ class PaymentType(ObjectType):
             return self.updated_at.isoformat()
         return getattr(self, 'updatedAt', None)
     
-    def resolve_status(self, info):
-        """Get status from booking service instead of local status"""
+    def resolve_canBeDeleted(self, info):
+        if hasattr(self, 'can_be_deleted_by_user'):
+            return self.can_be_deleted_by_user()
+        return False
+
+class UpdatePaymentStatusResponse(ObjectType):
+    payment = Field(PaymentType)
+    success = Boolean()
+    message = String()
+
+class UpdatePaymentStatus(Mutation):
+    class Arguments:
+        id = Int(required=True)
+        status = String(required=True)  # pending, success, failed
+
+    Output = UpdatePaymentStatusResponse
+
+    def mutate(self, info, id, status):
         try:
-            import requests
-            import os
-            
-            booking_id = self.booking_id if hasattr(self, 'booking_id') else getattr(self, 'bookingId', None)
-            if not booking_id:
-                return 'UNKNOWN'
-            
-            # Query booking service for status
-            booking_service_url = os.getenv('BOOKING_SERVICE_URL', 'http://booking-service:3007')
-            
-            query = {
-                'query': f'''
-                {{
-                    booking(id: {booking_id}) {{
-                        status
-                    }}
-                }}
-                '''
-            }
-            
-            response = requests.post(
-                f"{booking_service_url}/graphql",
-                json=query,
-                timeout=30,
-                headers={'Content-Type': 'application/json'}
+            # Validate status
+            valid_statuses = ['pending', 'success', 'failed']
+            if status not in valid_statuses:
+                return UpdatePaymentStatusResponse(
+                    payment=None,
+                    success=False,
+                    message=f"Invalid status '{status}'. Valid statuses are: {', '.join(valid_statuses)}"
+                )
+
+            payment = Payment.query.get(id)
+            if not payment:
+                return UpdatePaymentStatusResponse(
+                    payment=None,
+                    success=False,
+                    message=f"Payment with ID {id} not found"
+                )
+
+            old_status = payment.status
+            payment.status = status
+            payment.save()
+
+            return UpdatePaymentStatusResponse(
+                payment=payment,
+                success=True,
+                message=f"Payment status updated from '{old_status}' to '{status}'"
+            )
+        except Exception as e:
+            traceback.print_exc()
+            db.session.rollback()
+            return UpdatePaymentStatusResponse(
+                payment=None,
+                success=False,
+                message=f"Error updating payment status: {str(e)}"
             )
             
-            if response.ok:
-                data = response.json()
-                booking_data = data.get('data', {}).get('booking')
-                if booking_data:
-                    return booking_data.get('status', 'UNKNOWN')
-            
-            # If booking service fails, return PAID (since payment exists)
-            return 'PAID'
-            
-        except Exception as e:
-            print(f"Error fetching booking status: {e}")
-            return 'PAID'  # Default to PAID if payment exists
-    
-    def resolve_canBeDeleted(self, info):
-        return self.can_be_deleted_by_user() if hasattr(self, 'can_be_deleted_by_user') else False
-
-
 class CreatePaymentResponse(ObjectType):
     payment = Field(PaymentType)
     success = Boolean()
@@ -284,6 +289,7 @@ class Query(ObjectType):
 
 class Mutation(ObjectType):
     create_payment = CreatePayment.Field()
+    updatePaymentStatus = UpdatePaymentStatus.Field()
     update_payment = UpdatePayment.Field()
     delete_payment = DeletePayment.Field()
 
