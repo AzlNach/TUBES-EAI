@@ -9,18 +9,82 @@ class PaymentType(ObjectType):
     bookingId = Int()
     amount = Float()
     paymentMethod = String()
-    status = String()  # Virtual field
+    status = String()  # Dynamic status based on booking
     paymentProofImage = String()
     createdAt = String()
     updatedAt = String()
     canBeDeleted = Boolean()
     
+    # Add field resolvers to properly map snake_case database fields to camelCase GraphQL fields
+    def resolve_userId(self, info):
+        return self.user_id if hasattr(self, 'user_id') else getattr(self, 'userId', None)
+    
+    def resolve_bookingId(self, info):
+        # This is the critical fix - map booking_id to bookingId
+        return self.booking_id if hasattr(self, 'booking_id') else getattr(self, 'bookingId', None)
+        
+    def resolve_paymentMethod(self, info):
+        return self.payment_method if hasattr(self, 'payment_method') else getattr(self, 'paymentMethod', None)
+        
+    def resolve_paymentProofImage(self, info):
+        return self.payment_proof_image if hasattr(self, 'payment_proof_image') else getattr(self, 'paymentProofImage', None)
+        
+    def resolve_createdAt(self, info):
+        if hasattr(self, 'created_at') and self.created_at:
+            return self.created_at.isoformat()
+        return getattr(self, 'createdAt', None)
+        
+    def resolve_updatedAt(self, info):
+        if hasattr(self, 'updated_at') and self.updated_at:
+            return self.updated_at.isoformat()
+        return getattr(self, 'updatedAt', None)
+    
     def resolve_status(self, info):
-        """Virtual status field - always 'paid' since payment existence means it's paid"""
-        return 'paid'
+        """Get status from booking service instead of local status"""
+        try:
+            import requests
+            import os
+            
+            booking_id = self.booking_id if hasattr(self, 'booking_id') else getattr(self, 'bookingId', None)
+            if not booking_id:
+                return 'UNKNOWN'
+            
+            # Query booking service for status
+            booking_service_url = os.getenv('BOOKING_SERVICE_URL', 'http://booking-service:3007')
+            
+            query = {
+                'query': f'''
+                {{
+                    booking(id: {booking_id}) {{
+                        status
+                    }}
+                }}
+                '''
+            }
+            
+            response = requests.post(
+                f"{booking_service_url}/graphql",
+                json=query,
+                timeout=30,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            if response.ok:
+                data = response.json()
+                booking_data = data.get('data', {}).get('booking')
+                if booking_data:
+                    return booking_data.get('status', 'UNKNOWN')
+            
+            # If booking service fails, return PAID (since payment exists)
+            return 'PAID'
+            
+        except Exception as e:
+            print(f"Error fetching booking status: {e}")
+            return 'PAID'  # Default to PAID if payment exists
     
     def resolve_canBeDeleted(self, info):
-        return self.can_be_deleted_by_user()
+        return self.can_be_deleted_by_user() if hasattr(self, 'can_be_deleted_by_user') else False
+
 
 class CreatePaymentResponse(ObjectType):
     payment = Field(PaymentType)
@@ -48,16 +112,20 @@ class CreatePayment(Mutation):
                     message=f"Payment already exists for booking {bookingId}"
                 )
             
-            # Create payment (no status needed - existence = paid)
+            # Create payment with proper field mapping
             payment = Payment(
-                user_id=userId,
-                booking_id=bookingId,
+                user_id=userId,           # Map camelCase to snake_case
+                booking_id=bookingId,     # Map camelCase to snake_case
                 amount=amount,
-                payment_method=paymentMethod,
-                payment_proof_image=paymentProofImage
+                payment_method=paymentMethod,     # Map camelCase to snake_case
+                payment_proof_image=paymentProofImage  # Map camelCase to snake_case
             )
             
             if payment.save():
+                # Debug: Print payment data before returning
+                print(f"Created payment: id={payment.id}, user_id={payment.user_id}, booking_id={payment.booking_id}")
+                print(f"Payment object attributes: {vars(payment)}")
+                
                 return CreatePaymentResponse(
                     payment=payment,
                     success=True,
@@ -72,6 +140,8 @@ class CreatePayment(Mutation):
                 
         except Exception as e:
             db.session.rollback()
+            print(f"Error creating payment: {str(e)}")
+            traceback.print_exc()
             return CreatePaymentResponse(
                 payment=None,
                 success=False,
@@ -182,9 +252,13 @@ class Query(ObjectType):
             print(f"Error in resolve_payment: {str(e)}")
             return None
     
-    def resolve_user_payments(self, info, userId):  # ← Changed parameter name
+    def resolve_user_payments(self, info, userId):
         try:
-            return Payment.query.filter(Payment.user_id == userId).all()
+            payments = Payment.query.filter(Payment.user_id == userId).all()
+            print(f"Found {len(payments)} payments for user {userId}")
+            for payment in payments:
+                print(f"Payment {payment.id}: booking_id={payment.booking_id}, user_id={payment.user_id}")
+            return payments
         except Exception as e:
             print(f"Error in resolve_user_payments: {str(e)}")
             traceback.print_exc()

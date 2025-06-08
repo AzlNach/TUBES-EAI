@@ -1,13 +1,24 @@
 USE booking_db;
 
+-- Drop existing tables
+DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS bookings;
+
+-- Create bookings table with new structure
 CREATE TABLE IF NOT EXISTS bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    movie_id INT NOT NULL,
-    cinema_id INT NOT NULL,
-    showtime VARCHAR(50) NOT NULL,
-    seats TEXT,
+    showtime_id INT NOT NULL,
+    status ENUM('PENDING', 'PAID', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
     total_price DECIMAL(10, 2),
-    status VARCHAR(50) DEFAULT 'PENDING',
-    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    booking_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create tickets table
+CREATE TABLE IF NOT EXISTS tickets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id INT NOT NULL,
+    seat_number VARCHAR(10) NOT NULL,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_booking_seat (booking_id, seat_number)
 );

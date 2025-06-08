@@ -419,6 +419,7 @@ class UpdateSeatStatus(Mutation):
 
     def mutate(self, info, showtime_id, seat_number, status, booking_id=None):
         try:
+            # Find existing seat status
             seat_status = SeatStatus.query.filter_by(
                 showtime_id=showtime_id, 
                 seat_number=seat_number
@@ -428,19 +429,33 @@ class UpdateSeatStatus(Mutation):
                 return UpdateSeatStatusResponse(
                     seat_status=None,
                     success=False,
-                    message="Seat status not found"
+                    message=f"Seat {seat_number} not found for showtime {showtime_id}"
                 )
-
+            
+            # Validate status transition
+            if seat_status.status == 'BOOKED' and status != 'AVAILABLE':
+                return UpdateSeatStatusResponse(
+                    seat_status=None,
+                    success=False,
+                    message=f"Seat {seat_number} is already booked and cannot be changed to {status}"
+                )
+            
+            if status == 'RESERVED' and seat_status.status in ['BOOKED', 'RESERVED']:
+                return UpdateSeatStatusResponse(
+                    seat_status=None,
+                    success=False,
+                    message=f"Seat {seat_number} is already {seat_status.status}"
+                )
+            
+            # Update seat status
             seat_status.status = status
-            if booking_id:
-                seat_status.booking_id = booking_id
-            seat_status.updated_at = datetime.utcnow()
+            seat_status.booking_id = booking_id
             seat_status.save()
-
+            
             return UpdateSeatStatusResponse(
                 seat_status=seat_status,
                 success=True,
-                message="Seat status updated successfully"
+                message=f"Seat {seat_number} status updated to {status}"
             )
         except Exception as e:
             db.session.rollback()
