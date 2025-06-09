@@ -12,9 +12,9 @@
 // KONSISTEN DENGAN SCHEMA.PY - Field names sesuai gateway schema
 const SHOWTIME_FIELDS = {
     id: 'id',
-    movie_id: 'movie_id',
-    auditorium_id: 'auditorium_id',
-    start_time: 'start_time',
+    movieId: 'movieId',
+    auditoriumId: 'auditoriumId', 
+    startTime: 'startTime',
     price: 'price',
     movie: 'movie',
     auditorium: 'auditorium'
@@ -460,7 +460,7 @@ function applyFilters() {
         // Apply movie filter
         if (currentFilters.movie) {
             filtered = filtered.filter(showtime => {
-                const movieId = showtime.movie?.id || showtime.movieId || showtime.movie_id;
+                const movieId = showtime.movie?.id || showtime.movieId;
                 return movieId == currentFilters.movie;
             });
             console.log('After movie filter:', filtered.length);
@@ -475,33 +475,59 @@ function applyFilters() {
             console.log('After cinema filter:', filtered.length);
         }
         
-        // FIXED: Support both field formats for date filtering
+        // FIXED: Enhanced date filtering with better datetime parsing
         if (currentFilters.date) {
             filtered = filtered.filter(showtime => {
-                const startTimeValue = showtime.startTime || showtime.start_time;
-                if (!startTimeValue) return false;
-                const showtimeDate = new Date(startTimeValue).toISOString().split('T')[0];
-                return showtimeDate === currentFilters.date;
+                if (!showtime.startTime) return false;
+                
+                try {
+                    let dateTimeStr = showtime.startTime;
+                    if (typeof dateTimeStr === 'string') {
+                        dateTimeStr = dateTimeStr.replace(/['"]/g, '');
+                    }
+                    
+                    const showtimeDate = new Date(dateTimeStr);
+                    if (isNaN(showtimeDate.getTime())) return false;
+                    
+                    const filterDate = new Date(currentFilters.date);
+                    return showtimeDate.toISOString().split('T')[0] === filterDate.toISOString().split('T')[0];
+                } catch (error) {
+                    console.error('Error parsing date for filtering:', error);
+                    return false;
+                }
             });
             console.log('After date filter:', filtered.length);
         }
         
-        // FIXED: Support both field formats for time filtering
+        // FIXED: Enhanced time filtering with better datetime parsing
         if (currentFilters.time) {
             filtered = filtered.filter(showtime => {
-                const startTimeValue = showtime.startTime || showtime.start_time;
-                if (!startTimeValue) return false;
-                const showtimeHour = new Date(startTimeValue).getHours();
+                if (!showtime.startTime) return false;
                 
-                switch (currentFilters.time) {
-                    case 'morning':
-                        return showtimeHour >= 6 && showtimeHour < 12;
-                    case 'afternoon':
-                        return showtimeHour >= 12 && showtimeHour < 18;
-                    case 'evening':
-                        return showtimeHour >= 18 && showtimeHour <= 23;
-                    default:
-                        return true;
+                try {
+                    let dateTimeStr = showtime.startTime;
+                    if (typeof dateTimeStr === 'string') {
+                        dateTimeStr = dateTimeStr.replace(/['"]/g, '');
+                    }
+                    
+                    const showtimeDate = new Date(dateTimeStr);
+                    if (isNaN(showtimeDate.getTime())) return false;
+                    
+                    const showtimeHour = showtimeDate.getHours();
+                    
+                    switch (currentFilters.time) {
+                        case 'morning':
+                            return showtimeHour >= 6 && showtimeHour < 12;
+                        case 'afternoon':
+                            return showtimeHour >= 12 && showtimeHour < 18;
+                        case 'evening':
+                            return showtimeHour >= 18 && showtimeHour <= 23;
+                        default:
+                            return true;
+                    }
+                } catch (error) {
+                    console.error('Error parsing time for filtering:', error);
+                    return false;
                 }
             });
             console.log('After time filter:', filtered.length);
@@ -681,12 +707,31 @@ function createShowtimeCard(showtime, index) {
     const col = document.createElement('div');
     col.className = 'col-lg-4 col-md-6 col-sm-6 mb-4';
     
-    // FIXED: Support both field name formats
-    const startTimeValue = showtime.startTime || showtime.start_time;
-    const movieIdValue = showtime.movieId || showtime.movie_id;
-    const auditoriumIdValue = showtime.auditoriumId || showtime.auditorium_id;
+    // FIXED: Enhanced datetime parsing to handle different formats
+    let startTime = null;
+    if (showtime.startTime) {
+        try {
+            // Handle string datetime from backend
+            let dateTimeStr = showtime.startTime;
+            
+            // Remove quotes if present
+            if (typeof dateTimeStr === 'string') {
+                dateTimeStr = dateTimeStr.replace(/['"]/g, '');
+            }
+            
+            startTime = new Date(dateTimeStr);
+            
+            // Validate the date
+            if (isNaN(startTime.getTime())) {
+                console.warn('Invalid datetime for showtime:', showtime.id, dateTimeStr);
+                startTime = null;
+            }
+        } catch (error) {
+            console.error('Error parsing datetime for showtime:', showtime.id, error);
+            startTime = null;
+        }
+    }
     
-    const startTime = startTimeValue ? new Date(startTimeValue) : null;
     const timeDisplay = startTime ? startTime.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',
@@ -698,10 +743,8 @@ function createShowtimeCard(showtime, index) {
         day: 'numeric' 
     }) : 'TBD';
     
-    // Get movie poster
+    // Rest of the function remains the same...
     const posterUrl = showtime.movie?.posterUrl || 'https://via.placeholder.com/300x200/e2e8f0/64748b?text=No+Poster';
-    
-    // Handle button logic based on login status
     const buttonOnClick = `onclick="showShowtimeDetail(${showtime.id})"`;
     
     col.innerHTML = `
@@ -1119,7 +1162,7 @@ async function showShowtimeDetail(showtimeId) {
 
 // Render showtime detail in modal
 function renderShowtimeDetailModal(showtime) {
-    const startTime = showtime.start_time ? new Date(showtime.start_time) : null;
+    const startTime = showtime.startTime ? new Date(showtime.startTime) : null;
     const timeDisplay = startTime ? startTime.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',

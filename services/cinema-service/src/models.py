@@ -56,7 +56,7 @@ class Showtime(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     movie_id = db.Column(db.Integer, nullable=False)  # Reference to movie service
     auditorium_id = db.Column(db.Integer, db.ForeignKey('auditoriums.id'), nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False)
+    start_time = db.Column(db.String(50), nullable=False)  # Changed from DateTime to String
     price = db.Column(db.Numeric(10, 2), nullable=False)
 
     # Relationships

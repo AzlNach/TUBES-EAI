@@ -1,4 +1,4 @@
-from graphene import ObjectType, String, Int, List, Field, Mutation, Schema, Boolean, Float, DateTime, JSONString
+from graphene import ObjectType, String, Int, List, Field, Mutation, Schema, Boolean, Float, JSONString
 from models import Cinema, Auditorium, Showtime, SeatStatus, db
 from datetime import datetime
 import traceback
@@ -31,12 +31,24 @@ class AuditoriumType(ObjectType):
 
 class ShowtimeType(ObjectType):
     id = Int()
-    movie_id = Int()
-    auditorium_id = Int()
-    start_time = DateTime()
+    movieId = Int()  # Changed to camelCase for consistency
+    auditoriumId = Int()  # Changed to camelCase for consistency
+    startTime = String()  # Changed from DateTime to String
     price = Float()
     auditorium = Field(AuditoriumType)
     seat_statuses = List(lambda: SeatStatusType)
+
+    def resolve_movieId(self, info):
+        """Resolve movie_id field to camelCase movieId"""
+        return getattr(self, 'movie_id', None)
+    
+    def resolve_auditoriumId(self, info):
+        """Resolve auditorium_id field to camelCase auditoriumId"""
+        return getattr(self, 'auditorium_id', None)
+    
+    def resolve_startTime(self, info):
+        """Resolve start_time field to camelCase startTime"""
+        return getattr(self, 'start_time', None)
 
     def resolve_auditorium(self, info):
         return self.auditorium
@@ -46,12 +58,33 @@ class ShowtimeType(ObjectType):
 
 class SeatStatusType(ObjectType):
     id = Int()
-    showtime_id = Int()
-    seat_number = String()
+    showtimeId = Int()  # Changed to camelCase for consistency
+    seatNumber = String()  # Changed to camelCase for consistency
     status = String()
-    booking_id = Int()
-    updated_at = DateTime()
+    bookingId = Int()  # Changed to camelCase for consistency
+    updatedAt = String()  # Changed to String for consistency
     showtime = Field(ShowtimeType)
+
+    def resolve_showtimeId(self, info):
+        """Resolve showtime_id field to camelCase showtimeId"""
+        return getattr(self, 'showtime_id', None)
+    
+    def resolve_seatNumber(self, info):
+        """Resolve seat_number field to camelCase seatNumber"""
+        return getattr(self, 'seat_number', None)
+    
+    def resolve_bookingId(self, info):
+        """Resolve booking_id field to camelCase bookingId"""
+        return getattr(self, 'booking_id', None)
+    
+    def resolve_updatedAt(self, info):
+        """Resolve updated_at field to camelCase updatedAt and convert to string"""
+        updated_at = getattr(self, 'updated_at', None)
+        if updated_at:
+            if hasattr(updated_at, 'isoformat'):
+                return updated_at.isoformat()
+            return str(updated_at)
+        return None
 
     def resolve_showtime(self, info):
         return self.showtime
@@ -119,16 +152,13 @@ class UpdateCinema(Mutation):
 
     def mutate(self, info, id, name=None, city=None, capacity=None):
         try:
-            
             cinema = Cinema.query.get(id)
             if not cinema:
-                
                 return CreateCinemaResponse(
                     cinema=None,
                     success=False,
                     message=f"Cinema with ID {id} not found"
                 )
-                
                 
             if name:
                 cinema.name = name
@@ -145,7 +175,6 @@ class UpdateCinema(Mutation):
                 message="Cinema updated successfully"
             )
         except Exception as e:
-            
             db.session.rollback()
             traceback.print_exc()
             return CreateCinemaResponse(
@@ -153,8 +182,6 @@ class UpdateCinema(Mutation):
                 success=False,
                 message=f"Error updating cinema: {str(e)}"
             )
-
-
 
 class DeleteCinema(Mutation):
     class Arguments:
@@ -288,7 +315,7 @@ class CreateShowtime(Mutation):
     class Arguments:
         movie_id = Int(required=True)
         auditorium_id = Int(required=True)
-        start_time = DateTime(required=True)
+        start_time = String(required=True)  # Changed from DateTime to String
         price = Float(required=True)
 
     Output = CreateShowtimeResponse
@@ -304,10 +331,21 @@ class CreateShowtime(Mutation):
                     message="Auditorium not found"
                 )
 
+            # Validate start_time format (basic validation)
+            try:
+                # Try to parse the datetime string to ensure it's valid ISO format
+                datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            except ValueError:
+                return CreateShowtimeResponse(
+                    showtime=None,
+                    success=False,
+                    message="Invalid start_time format. Use ISO format: YYYY-MM-DDTHH:MM:SS"
+                )
+
             new_showtime = Showtime(
                 movie_id=movie_id,
                 auditorium_id=auditorium_id,
-                start_time=start_time,
+                start_time=start_time,  # Store as string
                 price=price
             )
             new_showtime.save()
@@ -341,7 +379,7 @@ class UpdateShowtime(Mutation):
         id = Int(required=True)
         movie_id = Int() 
         auditorium_id = Int()
-        start_time = DateTime()
+        start_time = String()  # Changed from DateTime to String
         price = Float()
 
     Output = CreateShowtimeResponse
@@ -369,6 +407,15 @@ class UpdateShowtime(Mutation):
                     )
                 showtime.auditorium_id = auditorium_id
             if start_time:
+                # Validate start_time format
+                try:
+                    datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                except ValueError:
+                    return CreateShowtimeResponse(
+                        showtime=None,
+                        success=False,
+                        message="Invalid start_time format. Use ISO format: YYYY-MM-DDTHH:MM:SS"
+                    )
                 showtime.start_time = start_time
             if price is not None:
                 showtime.price = price
@@ -481,7 +528,7 @@ class Query(ObjectType):
     showtimes = List(ShowtimeType)
     showtime = Field(ShowtimeType, id=Int(required=True))
     showtimes_by_auditorium = List(ShowtimeType, auditorium_id=Int(required=True))
-    showtimes_by_movie = List(ShowtimeType, movie_id=String(required=True))
+    showtimes_by_movie = List(ShowtimeType, movie_id=Int(required=True))  # Changed from String to Int
     
     # Seat status queries
     seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))

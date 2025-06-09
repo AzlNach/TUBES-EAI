@@ -188,10 +188,50 @@ class ShowtimeType(ObjectType):
     id = Int()
     movie_id = Int()
     auditorium_id = Int()
-    start_time = DateTime()
+    start_time = String()  # Changed from DateTime() to String()
     price = Float()
     auditorium = Field(AuditoriumType)
     movie = Field(MovieType)
+    
+    # Add camelCase resolvers for JavaScript compatibility
+    movieId = Int()
+    auditoriumId = Int()
+    startTime = String()  # Changed from DateTime() to String()
+    
+    def resolve_movieId(self, info):
+        if isinstance(self, dict):
+            return self.get('movieId') or self.get('movie_id')
+        return getattr(self, 'movie_id', None)
+    
+    def resolve_auditoriumId(self, info):
+        if isinstance(self, dict):
+            return self.get('auditoriumId') or self.get('auditorium_id')
+        return getattr(self, 'auditorium_id', None)
+    
+    def resolve_startTime(self, info):
+        """
+        Handle startTime field - return cleaned string without quotes
+        """
+        if isinstance(self, dict):
+            start_time_value = self.get('startTime') or self.get('start_time')
+        else:
+            start_time_value = getattr(self, 'start_time', None)
+        
+        if start_time_value:
+            # Clean the datetime string by removing quotes
+            if isinstance(start_time_value, str):
+                # Remove surrounding quotes if present
+                clean_value = start_time_value.strip("'\"")
+                return clean_value
+            return str(start_time_value)
+        
+        return None
+
+    def resolve_start_time(self, info):
+        """
+        Handle start_time field (snake_case version)
+        """
+        return self.resolve_startTime(info)
 
 class SeatStatusType(ObjectType):
     id = Int()
@@ -1408,114 +1448,157 @@ class Query(ObjectType):
         return auditoriums
     
 
-    def resolve_showtimes(self, info,movie_id=None, auditorium_id=None):
-        if movie_id:
-            query_data = {
-                'query': f'''
-                {{
-                    showtimesByMovie(movieId: "{movie_id}") {{
+    def resolve_showtimes(self, info, movie_id=None, auditorium_id=None):
+        print(f"resolve_showtimes called with movie_id={movie_id}, auditorium_id={auditorium_id}")
+        
+        # Get all showtimes from cinema service
+        query_data = {
+            'query': '''
+            {
+                showtimes {
+                    id
+                    movieId
+                    auditoriumId
+                    startTime
+                    price
+                    auditorium {
                         id
-                        movieId
-                        auditoriumId
-                        startTime
-                        price
-                        auditorium {{
+                        name
+                        cinema {
                             id
                             name
-                            cinema {{
-                                id
-                                name
-                                city
-                            }}
-                        }}
-                    }}
-                }}
-                '''
+                            city
+                        }
+                    }
+                }
             }
-            data_key = 'showtimesByMovie'
-        elif auditorium_id:
-            query_data = {
-                'query': f'''
-                {{
-                    showtimesByAuditorium(auditoriumId: {auditorium_id}) {{
-                        id
-                        movieId
-                        auditoriumId
-                        startTime
-                        price
-                        auditorium {{
-                            id
-                            name
-                            cinema {{
-                                id
-                                name
-                                city
-                            }}
-                        }}
-                    }}
-                }}
-                '''
-            }
-            data_key = 'showtimesByAuditorium'
-        else:
-            query_data = {'query': '{ showtimes { id movieId auditoriumId startTime price } }'}
-            data_key = 'showtimes'
-            
+            '''
+        }
+        
+        print(f"Making request to cinema service with query: {query_data}")
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        print(f"Cinema service response: {result}")
         
-        response = handle_service_response(result, 'cinema', data_key)
+        response = handle_service_response(result, 'cinema', 'showtimes')
         if not response['success']:
-            raise Exception(response['error'])
+            print(f"Error fetching showtimes: {response['error']}")
+            return []
         
-        # Transform camelCase response to snake_case for gateway ShowtimeType
-        showtimes = response['data']
-        if showtimes:
-            for showtime in showtimes:
-                # Transform camelCase to snake_case to match gateway ShowtimeType
-                if 'movieId' in showtime:
-                    movie_id_value = showtime['movieId']
-                    showtime['movie_id'] = showtime.pop('movieId')
-                    
-                    # Fetch movie details from movie service
-                    movie_query = {
-                        'query': f'''
-                        {{
-                            movie(id: {movie_id_value}) {{
-                                id
-                                title
-                                genre
-                                duration
-                                description
-                                releaseDate
-                                posterUrl
-                                rating
+        # Get raw showtimes data
+        raw_showtimes = response['data'] or []
+        print(f"Raw showtimes from cinema service: {len(raw_showtimes)} items")
+        
+        if not raw_showtimes:
+            print("No showtimes returned from cinema service")
+            return []
+        
+        # Process each showtime with datetime cleaning
+        processed_showtimes = []
+        
+        for showtime in raw_showtimes:
+            try:
+                print(f"Processing showtime: {showtime}")
+                
+                # Create processed showtime with cleaned datetime
+                processed_showtime = dict(showtime)  # Copy original
+                
+                # Clean startTime field if present
+                if 'startTime' in processed_showtime:
+                    start_time = processed_showtime['startTime']
+                    if isinstance(start_time, str):
+                        # Clean the datetime string by removing quotes
+                        clean_start_time = start_time.strip("'\"")
+                        processed_showtime['startTime'] = clean_start_time
+                        print(f"Cleaned datetime for showtime {showtime.get('id')}: {start_time} -> {clean_start_time}")
+                    else:
+                        # Convert to string if not already
+                        processed_showtime['startTime'] = str(start_time)
+                
+                # Apply filtering if needed
+                include_showtime = True
+                
+                if movie_id:
+                    showtime_movie_id = processed_showtime.get('movieId')
+                    if showtime_movie_id != int(movie_id):
+                        include_showtime = False
+                        print(f"Filtered out showtime {processed_showtime.get('id')} - movie mismatch")
+                
+                if auditorium_id and include_showtime:
+                    showtime_auditorium_id = processed_showtime.get('auditoriumId')
+                    if showtime_auditorium_id != int(auditorium_id):
+                        include_showtime = False
+                        print(f"Filtered out showtime {processed_showtime.get('id')} - auditorium mismatch")
+                
+                if include_showtime:
+                    # Enrich with movie details
+                    movie_id_value = processed_showtime.get('movieId')
+                    if movie_id_value:
+                        print(f"Fetching movie details for movieId: {movie_id_value}")
+                        movie_query = {
+                            'query': f'''
+                            {{
+                                movie(id: {movie_id_value}) {{
+                                    id
+                                    title
+                                    genre
+                                    duration
+                                    description
+                                    releaseDate
+                                    posterUrl
+                                    rating
+                                }}
                             }}
-                        }}
-                        '''
+                            '''
+                        }
+                        
+                        try:
+                            movie_result = make_service_request(SERVICE_URLS['movie'], movie_query, 'movie')
+                            if movie_result and not movie_result.get('errors'):
+                                movie_data = movie_result.get('data', {}).get('movie')
+                                if movie_data:
+                                    processed_showtime['movie'] = movie_data
+                                    print(f"Added movie data: {movie_data.get('title')}")
+                                else:
+                                    print(f"No movie data found for ID {movie_id_value}")
+                                    # Add placeholder
+                                    processed_showtime['movie'] = {
+                                        'id': movie_id_value,
+                                        'title': 'Unknown Movie',
+                                        'genre': None,
+                                        'duration': None,
+                                        'posterUrl': None,
+                                        'rating': None,
+                                        'description': None
+                                    }
+                            else:
+                                print(f"Movie service error: {movie_result}")
+                        except Exception as movie_error:
+                            print(f"Error fetching movie data: {movie_error}")
+                    
+                    # Transform to snake_case for gateway compatibility
+                    gateway_showtime = {
+                        'id': processed_showtime.get('id'),
+                        'movie_id': processed_showtime.get('movieId'),
+                        'auditorium_id': processed_showtime.get('auditoriumId'),
+                        'start_time': processed_showtime.get('startTime'),  # Now cleaned string
+                        'price': processed_showtime.get('price'),
+                        'auditorium': processed_showtime.get('auditorium'),
+                        'movie': processed_showtime.get('movie')
                     }
                     
-                    movie_result = make_service_request(SERVICE_URLS['movie'], movie_query, 'movie')
-                    if movie_result and not movie_result.get('errors'):
-                        movie_data = movie_result.get('data', {}).get('movie')
-                        if movie_data:
-                            # Add movie details to showtime
-                            showtime['movie'] = {
-                                'id': movie_data.get('id'),
-                                'title': movie_data.get('title'),
-                                'genre': movie_data.get('genre'),
-                                'duration': movie_data.get('duration'),
-                                'description': movie_data.get('description'),
-                                'releaseDate': movie_data.get('releaseDate'),
-                                'posterUrl': movie_data.get('posterUrl'),
-                                'rating': movie_data.get('rating')
-                            }
-                    
-                if 'auditoriumId' in showtime:
-                    showtime['auditorium_id'] = showtime.pop('auditoriumId')
-                if 'startTime' in showtime:
-                    showtime['start_time'] = showtime.pop('startTime')
+                    processed_showtimes.append(gateway_showtime)
+                    print(f"Added showtime {gateway_showtime.get('id')} to results")
+            
+            except Exception as process_error:
+                print(f"Error processing showtime {showtime}: {process_error}")
+                # Continue with next showtime instead of failing completely
+                continue
         
-        return showtimes
+        print(f"Final processed showtimes: {len(processed_showtimes)} items")
+        if processed_showtimes:
+            print(f"Sample processed showtime: {processed_showtimes[0]}")
+        
+        return processed_showtimes
     
 
     def resolve_seat_statuses(self, info,showtime_id):
@@ -3311,13 +3394,25 @@ class CreateShowtime(Mutation):
     class Arguments:
         movieId = Int(required=True)  # Changed to camelCase
         auditoriumId = Int(required=True)  # Changed to camelCase
-        startTime = DateTime(required=True)  # Changed to camelCase
+        startTime = String(required=True)  # Changed from DateTime to String
         price = Float(required=True)
 
     Output = CreateShowtimeResponse
 
     @require_admin
     def mutate(self, info, current_user, movieId, auditoriumId, startTime, price):
+        # Validate startTime format
+        try:
+            from datetime import datetime
+            # Try to parse the datetime string to ensure it's valid ISO format
+            datetime.fromisoformat(startTime.replace('Z', '+00:00'))
+        except ValueError:
+            return CreateShowtimeResponse(
+                showtime=None,
+                success=False,
+                message="Invalid startTime format. Use ISO format: YYYY-MM-DDTHH:MM:SS"
+            )
+        
         # Step 1: Validate movie exists in movie service
         movie_check_query = {
             'query': f'''
@@ -3353,10 +3448,10 @@ class CreateShowtime(Mutation):
                 message=f"Movie with ID {movieId} does not exist"
             )
         
-        # Step 2: Create showtime (original logic)
+        # Step 2: Create showtime - FIXED: Use String type for startTime
         query_data = {
             'query': '''
-            mutation($movieId: Int!, $auditoriumId: Int!, $startTime: DateTime!, $price: Float!) {
+            mutation($movieId: Int!, $auditoriumId: Int!, $startTime: String!, $price: Float!) {
                 createShowtime(movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
                     showtime { 
                         id 
@@ -3382,7 +3477,7 @@ class CreateShowtime(Mutation):
             'variables': {
                 'movieId': movieId, 
                 'auditoriumId': auditoriumId, 
-                'startTime': startTime.isoformat(), 
+                'startTime': startTime,  # Pass as string directly
                 'price': price
             }
         }
@@ -3413,13 +3508,14 @@ class CreateShowtime(Mutation):
                 'auditorium_id': showtime_data.get('auditoriumId'),  # Transform camelCase to snake_case
                 'start_time': showtime_data.get('startTime'),  # Transform camelCase to snake_case
                 'price': showtime_data.get('price'),
-                'auditorium': showtime_data.get('auditorium')
+                'auditorium': showtime_data.get('auditorium'),
+                'movie': movie_data  # Add movie data from validation step
             }
             
             return CreateShowtimeResponse(
                 showtime=transformed_showtime,
                 success=create_result.get('success', False),
-                message=create_result.get('message', 'Showtime operation completed')
+                message=create_result.get('message', 'Showtime created successfully')
             )
         
         return CreateShowtimeResponse(
@@ -3433,48 +3529,82 @@ class UpdateShowtime(Mutation):
         id = Int(required=True)
         movieId = Int()  # Changed to camelCase
         auditoriumId = Int()  # Changed to camelCase
-        startTime = DateTime()  # Changed to camelCase
+        startTime = String()  # Changed from DateTime to String
         price = Float()
 
     Output = CreateShowtimeResponse
 
     @require_admin
     def mutate(self, info, current_user, id, movieId=None, auditoriumId=None, startTime=None, price=None):
-        # Convert startTime to ISO format if provided
-        start_time_iso = startTime.isoformat() if startTime else None
+        # Validate startTime format if provided
+        if startTime:
+            try:
+                from datetime import datetime
+                datetime.fromisoformat(startTime.replace('Z', '+00:00'))
+            except ValueError:
+                return CreateShowtimeResponse(
+                    showtime=None,
+                    success=False,
+                    message="Invalid startTime format. Use ISO format: YYYY-MM-DDTHH:MM:SS"
+                )
+        
+        # Build variables dict dynamically
+        variables = {'id': id}
+        mutation_fields = []
+        
+        if movieId is not None:
+            variables['movieId'] = movieId
+            mutation_fields.append('$movieId: Int')
+        if auditoriumId is not None:
+            variables['auditoriumId'] = auditoriumId
+            mutation_fields.append('$auditoriumId: Int')
+        if startTime is not None:
+            variables['startTime'] = startTime
+            mutation_fields.append('$startTime: String')  # Changed from DateTime to String
+        if price is not None:
+            variables['price'] = price
+            mutation_fields.append('$price: Float')
+        
+        # Build mutation arguments dynamically
+        mutation_args = []
+        if movieId is not None:
+            mutation_args.append('movieId: $movieId')
+        if auditoriumId is not None:
+            mutation_args.append('auditoriumId: $auditoriumId')
+        if startTime is not None:
+            mutation_args.append('startTime: $startTime')
+        if price is not None:
+            mutation_args.append('price: $price')
+        
+        fields_str = ', '.join(mutation_fields)
+        args_str = ', '.join(mutation_args)
         
         query_data = {
-            'query': '''
-            mutation($id: Int!, $movieId: Int, $auditoriumId: Int, $startTime: DateTime, $price: Float) {
-                updateShowtime(id: $id, movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
-                    showtime { 
+            'query': f'''
+            mutation($id: Int!{', ' + fields_str if fields_str else ''}) {{
+                updateShowtime(id: $id{', ' + args_str if args_str else ''}) {{
+                    showtime {{ 
                         id 
                         movieId 
                         auditoriumId 
                         startTime 
                         price
-                        auditorium {
+                        auditorium {{
                             id
                             name
-                            cinema {
+                            cinema {{
                                 id
                                 name
                                 city
-                            }
-                        }
-                    }
+                            }}
+                        }}
+                    }}
                     success 
                     message
-                }
-            }
+                }}
+            }}
             ''',
-            'variables': {
-                'id': id,
-                'movieId': movieId, 
-                'auditoriumId': auditoriumId, 
-                'startTime': start_time_iso, 
-                'price': price
-            }
+            'variables': variables
         }
         
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
@@ -3499,7 +3629,7 @@ class UpdateShowtime(Mutation):
                 'auditorium': showtime_data.get('auditorium')
             }
             
-            # Fetch movie details from movie service
+            # Fetch movie details from movie service if movieId is available
             movie_id_value = showtime_data.get('movieId')
             if movie_id_value:
                 movie_query = {
@@ -3538,7 +3668,7 @@ class UpdateShowtime(Mutation):
             return CreateShowtimeResponse(
                 showtime=transformed_showtime,
                 success=update_result.get('success', False),
-                message=update_result.get('message', 'Showtime update completed')
+                message=update_result.get('message', 'Showtime updated successfully')
             )
         
         return CreateShowtimeResponse(
@@ -3546,7 +3676,7 @@ class UpdateShowtime(Mutation):
             success=update_result.get('success', False),
             message=update_result.get('message', 'Showtime update completed')
         )
-
+        
 class DeleteShowtime(Mutation):
     class Arguments:
         id = Int(required=True)
