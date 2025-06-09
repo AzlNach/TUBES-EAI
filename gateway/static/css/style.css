@@ -1,0 +1,1956 @@
+:root {
+  --primary-color: #ff4d4d;
+  --secondary-color: #1e293b;
+  --accent-color: #ffc107;
+  --dark-color: #0f172a;
+  --light-color: #f8fafc;
+  --text-color: #334155;
+  --gradient-primary: linear-gradient(135deg, #ff4d4d 0%, #ff6b6b 100%);
+  --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --shadow-light: 0 5px 15px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-heavy: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  color: var(--text-color);
+  background-color: var(--light-color);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* =============================================================================
+   ANIMATIONS & KEYFRAMES - DIPERBAIKI
+   ============================================================================= */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px var(--primary-color), 0 0 10px var(--primary-color);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--primary-color), 0 0 30px var(--primary-color);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* DIPERBAIKI: Animasi khusus untuk movies dan cinemas */
+@keyframes movieSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(50px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cinemaSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes sectionTitleReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =============================================================================
+   UTILITY CLASSES - DIPERBAIKI
+   ============================================================================= */
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.8s ease-out forwards;
+}
+
+.animate-fade-in-left {
+  animation: fadeInLeft 0.8s ease-out forwards;
+}
+
+.animate-fade-in-right {
+  animation: fadeInRight 0.8s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.6s ease-out forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* DIPERBAIKI: Kelas animasi terpisah untuk movies dan cinemas */
+.animate-movie-in {
+  opacity: 0;
+  animation: movieSlideIn 0.8s ease-out forwards;
+}
+
+.animate-cinema-in {
+  opacity: 0;
+  animation: cinemaSlideIn 0.8s ease-out forwards;
+}
+
+.animate-section-title {
+  opacity: 0;
+  animation: sectionTitleReveal 1s ease-out forwards;
+}
+
+/* Animation delays untuk staggered effects */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+.delay-700 { animation-delay: 0.7s; }
+.delay-800 { animation-delay: 0.8s; }
+
+/* =============================================================================
+   NAVIGATION
+   ============================================================================= */
+
+.navbar {
+  background: var(--gradient-dark) !important;
+  box-shadow: var(--shadow-medium);
+  padding: 1rem 0;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1000;
+}
+
+.navbar.scrolled {
+  padding: 0.5rem 0;
+  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.95) !important;
+}
+
+.navbar-brand {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 1.8rem;
+  color: var(--primary-color) !important;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.navbar-brand:hover {
+  color: var(--accent-color) !important;
+  transform: scale(1.05);
+  text-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+}
+
+.navbar-brand i {
+  margin-right: 0.5rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  padding: 0.7rem 1.2rem;
+  margin: 0 0.2rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.navbar-dark .navbar-nav .nav-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--gradient-primary);
+  transition: all 0.3s ease;
+  z-index: -1;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover::before,
+.navbar-dark .navbar-nav .nav-link.active::before {
+  left: 0;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link.active {
+  color: white !important;
+  transform: translateY(-2px);
+}
+
+.navbar-toggler {
+  border: none;
+  padding: 0.25rem 0.5rem;
+}
+
+.navbar-toggler:focus {
+  box-shadow: none;
+}
+
+/* =============================================================================
+   HERO SECTION
+   ============================================================================= */
+
+.hero-section {
+  background: linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.8)),
+            url('https://images.unsplash.com/photo-1489599894568-c70024d0c93b?ixlib=rb-4.0.3') no-repeat center center;
+  background-size: cover;
+  background-attachment: fixed;
+  padding: 200px 0 120px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, transparent 0%, rgba(15, 23, 42, 0.3) 70%);
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+}
+
+.hero-title {
+  font-size: 4rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(45deg, #ffffff, #f0f0f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0;
+  animation: fadeInUp 1s ease-out 0.3s forwards;
+}
+
+.hero-tagline {
+  font-size: 1.4rem;
+  margin-bottom: 3rem;
+  opacity: 0.95;
+  text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  animation: fadeInUp 1s ease-out 0.6s forwards;
+}
+
+.btn-hero {
+  background: var(--gradient-primary);
+  border: none;
+  padding: 1rem 2.5rem;
+  font-weight: 600;
+  border-radius: 50px;
+  color: white;
+  text-decoration: none;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(255, 77, 77, 0.3);
+  opacity: 0;
+  animation: fadeInUp 1s ease-out 0.9s forwards;
+}
+
+.btn-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: all 0.5s ease;
+}
+
+.btn-hero:hover::before {
+  left: 100%;
+}
+
+.btn-hero:hover {
+  color: white;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 15px 35px rgba(255, 77, 77, 0.4);
+}
+
+.btn-outline-light {
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  padding: 1rem 2.5rem;
+  border-radius: 50px;
+  transition: all 0.4s ease;
+  opacity: 0;
+  animation: fadeInUp 1s ease-out 1.2s forwards;
+}
+
+.btn-outline-light:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+  transform: translateY(-3px);
+  backdrop-filter: blur(10px);
+}
+
+/* =============================================================================
+   SECTIONS & CARDS - DIPERBAIKI UNTUK MENGATASI BENTROK ANIMASI
+   ============================================================================= */
+
+.section-title {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 3rem;
+  font-weight: 700;
+  color: var(--secondary-color);
+  font-size: 2.5rem;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -15px;
+  height: 4px;
+  width: 80px;
+  background: var(--gradient-primary);
+  border-radius: 2px;
+  animation: shimmer 2s infinite;
+  background-size: 200px 100%;
+  background-image: linear-gradient(90deg, var(--primary-color) 25%, var(--accent-color) 50%, var(--primary-color) 75%);
+}
+
+/* DIPERBAIKI: Animasi terpisah untuk movie cards */
+.movie-card {
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-light);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  height: 100%;
+  background: white;
+  position: relative;
+  opacity: 0;
+  transform: translateY(50px) scale(0.9);
+  animation: movieSlideIn 0.8s ease-out forwards;
+}
+
+.movie-card:hover {
+  transform: translateY(-15px) scale(1.05);
+  box-shadow: var(--shadow-heavy);
+}
+
+.movie-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* background: var(--gradient-primary); */
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.movie-card:hover::before {
+  opacity: 0.05;
+}
+
+/* DIPERBAIKI: Animasi terpisah untuk cinema cards */
+.cinema-card {
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-light);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  height: 100%;
+  background: white;
+  position: relative;
+  opacity: 0;
+  transform: translateX(-50px) scale(0.9);
+  animation: cinemaSlideIn 0.8s ease-out forwards;
+}
+
+.cinema-card:hover {
+  transform: translateY(-10px) translateX(5px) scale(1.02);
+  box-shadow: var(--shadow-heavy);
+}
+
+.cinema-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.cinema-card:hover::before {
+  opacity: 0.03;
+}
+
+.movie-poster, .cinema-image {
+  height: 350px;
+  object-fit: cover;
+  transition: all 0.5s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.movie-card:hover .movie-poster {
+  transform: scale(1.1) rotate(1deg);
+}
+
+.cinema-card:hover .cinema-image {
+  transform: scale(1.08) rotate(-1deg);
+}
+
+.card-body {
+  padding: 1.5rem;
+  position: relative;
+  z-index: 3;
+}
+
+.card-title {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  color: var(--secondary-color);
+  transition: all 0.3s ease;
+}
+
+.movie-card:hover .card-title {
+  color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+.cinema-card:hover .card-title {
+  color: var(--primary-color);
+  transform: translateX(5px);
+}
+
+.rating-stars {
+  color: var(--accent-color);
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
+}
+
+.genre-badge {
+  background: var(--gradient-dark);
+  color: white;
+  border-radius: 25px;
+  padding: 0.4rem 1rem;
+  margin: 0.2rem 0.2rem 0.2rem 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: inline-block;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.genre-badge:hover {
+  background: var(--gradient-primary);
+  transform: scale(1.05);
+}
+
+.card-footer {
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.8), rgba(248, 250, 252, 0.9));
+  padding: 1.2rem 1.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 3;
+}
+
+.btn-view {
+  background: var(--gradient-primary);
+  border: none;
+  border-radius: 50px;
+  padding: 0.8rem 0;
+  font-weight: 600;
+  color: white;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  display: block;
+  text-align: center;
+}
+
+.btn-view::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.4s ease;
+}
+
+.btn-view:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.btn-view:hover {
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 77, 77, 0.3);
+}
+
+/* =============================================================================
+   ALTERNATING SECTIONS - DIPERBAIKI
+   ============================================================================= */
+
+.section-alt {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  position: relative;
+  overflow: hidden;
+  /* DIPERBAIKI: Menambahkan margin untuk spacing yang lebih baik */
+  margin-top: 4rem;
+}
+
+.section-alt::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: linear-gradient(45deg, transparent 33%, var(--light-color) 33%, var(--light-color) 66%, transparent 66%);
+  background-size: 60px 60px;
+  /* DIPERBAIKI: Mengurangi opacity untuk efek yang lebih subtle */
+  opacity: 0.5;
+}
+
+.section-alt::after {
+  content: '';
+  position: absolute;
+  bottom: -50px;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: linear-gradient(-45deg, transparent 33%, var(--light-color) 33%, var(--light-color) 66%, transparent 66%);
+  background-size: 60px 60px;
+  opacity: 0.5;
+}
+
+/* =============================================================================
+   FEATURES SECTION
+   ============================================================================= */
+
+.feature-icon {
+  transition: all 0.4s ease;
+}
+
+.feature-icon i {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 10px rgba(255, 77, 77, 0.3));
+}
+
+.card:hover .feature-icon {
+  transform: scale(1.2) rotate(5deg);
+  animation: pulse 1s infinite;
+}
+
+.card:hover .feature-icon i {
+  animation: glow 2s infinite;
+}
+
+/* =============================================================================
+   FOOTER
+   ============================================================================= */
+
+footer {
+  background: var(--gradient-dark);
+  padding: 5rem 0 2rem;
+  margin-top: auto;
+  position: relative;
+  overflow: hidden;
+}
+
+footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+}
+
+footer h5 {
+  color: white;
+  margin-bottom: 2rem;
+  font-weight: 600;
+  position: relative;
+}
+
+footer h5::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -10px;
+  width: 50px;
+  height: 2px;
+  background: var(--gradient-primary);
+}
+
+footer p, footer li {
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+footer a.text-white {
+  transition: all 0.3s ease;
+  text-decoration: none;
+  position: relative;
+}
+
+footer a.text-white::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+  transition: all 0.3s ease;
+}
+
+footer a.text-white:hover::before {
+  width: 100%;
+}
+
+footer a.text-white:hover {
+  color: var(--primary-color) !important;
+  transform: translateX(5px);
+}
+
+.footer-brand {
+  color: var(--primary-color);
+  font-weight: 700;
+  font-size: 1.8rem;
+  margin-bottom: 1.5rem;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.footer-list li {
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.footer-list li:hover {
+  transform: translateX(10px);
+}
+
+hr.footer-divider {
+  background: linear-gradient(to right, transparent, var(--primary-color), transparent);
+  height: 2px;
+  border: none;
+  margin: 3rem 0;
+}
+
+/* Social media icons */
+footer .fs-5 {
+  transition: all 0.3s ease;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 45px;
+  height: 45px;
+}
+
+footer .fs-5:hover {
+  background: var(--gradient-primary);
+  transform: translateY(-5px) scale(1.1);
+  box-shadow: 0 8px 20px rgba(255, 77, 77, 0.3);
+}
+
+/* =============================================================================
+   AUTH PAGES
+   ============================================================================= */
+
+.auth-page {
+  background: var(--gradient-dark);
+  min-height: 100vh;
+}
+
+.auth-section {
+  min-height: calc(100vh - 200px);
+  display: flex;
+  align-items: center;
+  padding: 3rem 0;
+}
+
+.auth-card {
+  border: none;
+  border-radius: 25px;
+  box-shadow: var(--shadow-heavy);
+  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  position: relative;
+  animation: slideInFromBottom 0.8s ease-out;
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: var(--gradient-primary);
+}
+
+.auth-card .card-body {
+  padding: 3rem;
+}
+
+.auth-card .form-control {
+  border: 2px solid rgba(30, 41, 59, 0.1);
+  border-radius: 15px;
+  padding: 1rem 1.2rem;
+  transition: all 0.3s ease;
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.auth-card .form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(255, 77, 77, 0.15);
+  background: white;
+  transform: translateY(-2px);
+}
+
+.auth-card .btn-primary {
+  background: var(--gradient-primary);
+  border: none;
+  border-radius: 15px;
+  padding: 1rem;
+  font-weight: 600;
+  transition: all 0.4s ease;
+}
+
+.auth-card .btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(255, 77, 77, 0.3);
+}
+
+/* =============================================================================
+   AUTH FOOTER STYLES
+   ============================================================================= */
+
+.btn-login-required {
+    background: linear-gradient(135deg, #6c757d, #495057) !important;
+    border-color: #6c757d !important;
+    color: white !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-login-required::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: all 0.5s ease;
+}
+
+.btn-login-required:hover::before {
+    left: 100%;
+}
+
+.btn-login-required:hover {
+    background: linear-gradient(135deg, #5a6268, #343a40) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(108, 117, 125, 0.3);
+    color: white !important;
+}
+
+.auth-footer {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 77, 77, 0.1);
+  padding: 2rem 0 1rem;
+  margin-top: auto;
+  position: relative;
+}
+
+.auth-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+}
+
+.footer-brand-auth {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.footer-links-auth a {
+  color: var(--text-color);
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.footer-links-auth a::before {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+  transition: all 0.3s ease;
+}
+
+.footer-links-auth a:hover {
+  color: var(--primary-color);
+}
+
+.footer-links-auth a:hover::before {
+  width: 100%;
+}
+
+.social-links-auth .social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.social-links-auth .social-icon:hover {
+  background: var(--gradient-primary);
+  color: white !important;
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(255, 77, 77, 0.3);
+}
+
+/* Auth page body adjustments */
+.auth-page {
+  background: var(--gradient-dark);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  min-height: calc(100vh - 200px);
+}
+
+/* =============================================================================
+   LOADING & LOADERS
+   ============================================================================= */
+
+.loader-container {
+  padding: 4rem 0;
+}
+
+.spinner-border {
+  animation: pulse 1.5s infinite;
+}
+
+/* Custom loading animation for movie cards */
+.loading-card {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 20px;
+  height: 400px;
+}
+
+/* =============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 2.5rem;
+  }
+  
+  .hero-section {
+    padding: 120px 0 80px;
+    background-attachment: scroll;
+  }
+  
+  .section-title {
+    font-size: 2rem;
+  }
+  
+  .btn-hero, .btn-outline-light {
+    padding: 0.8rem 2rem;
+    font-size: 0.9rem;
+  }
+  
+  .movie-card, .cinema-card {
+    margin-bottom: 2rem;
+  }
+  
+  .navbar-brand {
+    font-size: 1.5rem;
+  }
+  
+  .auth-card .card-body {
+    padding: 2rem;
+  }
+
+  /* DIPERBAIKI: Mobile animations yang lebih smooth */
+  .movie-card {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+  
+  .cinema-card {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+}
+
+@media (max-width: 576px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .hero-tagline {
+    font-size: 1.1rem;
+  }
+  
+  .section-title {
+    font-size: 1.8rem;
+  }
+  
+  .d-flex.gap-3 {
+    flex-direction: column;
+    gap: 1rem !important;
+  }
+
+  /* DIPERBAIKI: Simplifikasi animasi untuk mobile */
+  .movie-card, .cinema-card {
+    animation: fadeInUp 0.5s ease-out forwards;
+  }
+}
+
+/* =============================================================================
+   ACCESSIBILITY & PERFORMANCE - DIPERBAIKI
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  /* Tetap berikan feedback visual tanpa animasi */
+  .movie-card, .cinema-card {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Focus states for better accessibility */
+.btn:focus,
+.form-control:focus,
+.nav-link:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --primary-color: #ff0000;
+    --secondary-color: #000000;
+    --text-color: #000000;
+  }
+}
+
+/* =============================================================================
+   INTERSECTION OBSERVER COMPATIBILITY - TAMBAHAN BARU
+   ============================================================================= */
+
+/* Kelas untuk elemen yang belum terlihat */
+.hidden-element {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* Kelas untuk movies section */
+.movies-section .hidden-element {
+  transform: translateY(50px) scale(0.9);
+}
+
+/* Kelas untuk cinemas section */
+.cinemas-section .hidden-element {
+  transform: translateX(-50px) scale(0.9);
+}
+
+/* Animasi saat elemen terlihat */
+.visible-element {
+  transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  opacity: 1;
+  transform: translateY(0) translateX(0) scale(1);
+}
+
+/* Staggered animation untuk multiple cards */
+.visible-element.delay-1 { transition-delay: 0.1s; }
+.visible-element.delay-2 { transition-delay: 0.2s; }
+.visible-element.delay-3 { transition-delay: 0.3s; }
+.visible-element.delay-4 { transition-delay: 0.4s; }
+
+/* =============================================================================
+   MOVIES PAGE SPECIFIC STYLES - PERBAIKAN
+   ============================================================================= */
+
+/* Page Header Styles - EXISTING */
+.page-header {
+  background: linear-gradient(135deg, var(--light-color) 0%, #e2e8f0 100%);
+  padding: 3rem 0 2rem;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 3px solid var(--primary-color);
+}
+
+.page-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -100px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(255, 77, 77, 0.1) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+.page-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--secondary-color);
+  margin-bottom: 0.5rem;
+  animation: fadeInLeft 0.8s ease-out;
+}
+
+.page-subtitle {
+  font-size: 1.1rem;
+  color: var(--text-color);
+  opacity: 0.8;
+  animation: fadeInLeft 0.8s ease-out 0.2s both;
+}
+
+.page-stats .badge {
+  font-size: 1rem !important;
+  padding: 0.8rem 1.5rem;
+  border-radius: 50px;
+  animation: fadeInRight 0.8s ease-out 0.4s both;
+  box-shadow: 0 4px 15px rgba(255, 77, 77, 0.2);
+}
+
+/* Breadcrumb Styles - EXISTING */
+.breadcrumb {
+  background: none;
+  padding: 0;
+  margin-bottom: 1rem;
+  animation: fadeInLeft 0.8s ease-out 0.1s both;
+}
+
+.breadcrumb-item a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.breadcrumb-item a:hover {
+  color: var(--secondary-color);
+  transform: translateX(3px);
+}
+
+.breadcrumb-item.active {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+/* Filter Section Styles - DIPERBAIKI: TIDAK STICKY */
+.filter-section {
+  padding: 2rem 0;
+  background: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  /* DIPERBAIKI: Hapus sticky positioning */
+  position: static;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.filter-card {
+  border: none;
+  border-radius: 20px;
+  box-shadow: var(--shadow-light);
+  border: 1px solid rgba(255, 77, 77, 0.1);
+  animation: fadeInUp 0.8s ease-out 0.6s both;
+  background: white;
+}
+
+.filter-card .card-body {
+  padding: 2rem;
+}
+
+/* DIPERBAIKI: Label dengan kontras tinggi */
+.filter-card .form-label {
+  color: var(--secondary-color) !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.8rem;
+  font-size: 0.95rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  /* DIPERBAIKI: Background untuk kontras lebih baik */
+  background: rgba(30, 41, 59, 0.05);
+  padding: 0.3rem 0.8rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--primary-color);
+}
+
+.filter-card .form-select {
+  border: 2px solid rgba(30, 41, 59, 0.15);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  transition: all 0.3s ease;
+  background: rgba(30, 41, 59, 0.05);
+  font-weight: 500;
+  color: var(--secondary-color);
+}
+
+.filter-card .form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(255, 77, 77, 0.15);
+  background: rgba(30, 41, 59, 0.08);
+  transform: translateY(-2px);
+}
+
+.filter-card .form-control {
+  border: 2px solid rgba(30, 41, 59, 0.15);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  transition: all 0.3s ease;
+  background: rgba(248, 250, 252, 0.9);
+  color: var(--secondary-color);
+}
+
+.filter-card .form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(255, 77, 77, 0.15);
+  background: white;
+  transform: translateY(-2px);
+}
+
+/* Filter Buttons - EXISTING */
+.filter-card .btn {
+  border-radius: 12px;
+  padding: 0.8rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.filter-card .btn-primary {
+  background: var(--gradient-primary);
+  border: none;
+}
+
+.filter-card .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 77, 77, 0.3);
+}
+
+.filter-card .btn-outline-secondary {
+  border-color: rgba(108, 117, 125, 0.3);
+  color: var(--text-color);
+}
+
+.filter-card .btn-outline-secondary:hover {
+  background: var(--secondary-color);
+  border-color: var(--secondary-color);
+  transform: translateY(-2px);
+}
+
+.filter-card .btn-outline-primary {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.filter-card .btn-outline-primary.active,
+.filter-card .btn-outline-primary:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* View Toggle Buttons - EXISTING */
+.btn-group .btn-outline-primary {
+  padding: 0.6rem 1rem;
+  border-width: 2px;
+}
+
+.btn-group .btn-outline-primary.active {
+  background: var(--gradient-primary);
+  border-color: var(--primary-color);
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 77, 77, 0.3);
+}
+
+/* DIPERBAIKI: Movie Cards - STYLING SEPERTI CINEMA CARDS */
+.movie-card {
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-light);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  height: 100%;
+  background: white;
+  position: relative;
+  opacity: 0;
+  transform: translateY(50px) scale(0.9);
+  animation: movieSlideIn 0.8s ease-out forwards;
+  cursor: pointer;
+}
+
+.movie-card:hover {
+  transform: translateY(-15px) scale(1.05);
+  box-shadow: var(--shadow-heavy);
+}
+
+.movie-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); */
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.movie-card:hover::before {
+  opacity: 0.05;
+}
+
+/* Movie Poster Container - DIPERBAIKI: SEPERTI CINEMA IMAGE */
+.movie-poster-container {
+  position: relative;
+  overflow: hidden;
+  height: 350px;
+}
+
+.movie-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: all 0.5s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.movie-card:hover .movie-poster {
+  transform: scale(1.1) rotate(1deg);
+}
+
+.movie-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.7) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 3;
+}
+
+.movie-card:hover .movie-overlay {
+  opacity: 1;
+}
+
+.movie-quick-view {
+  transform: translateY(20px);
+  transition: all 0.3s ease;
+}
+
+.movie-card:hover .movie-quick-view {
+  transform: translateY(0);
+}
+
+.movie-rating-badge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 10;
+}
+
+.movie-rating-badge .badge {
+  font-size: 0.8rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 20px;
+  font-weight: 600;
+  background: rgba(255, 193, 7, 0.9) !important;
+  backdrop-filter: blur(10px);
+}
+
+/* DIPERBAIKI: Card Body seperti Cinema Cards */
+.movie-card .card-body {
+  padding: 1.5rem;
+  position: relative;
+  z-index: 3;
+}
+
+.movie-card .card-title {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  color: var(--secondary-color);
+  transition: all 0.3s ease;
+}
+
+.movie-card:hover .card-title {
+  color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+/* Movie Meta Information - DIPERBAIKI */
+.movie-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.genre-badge {
+  background: var(--gradient-dark);
+  color: white;
+  border-radius: 25px;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: inline-block;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.genre-badge:hover {
+  background: var(--gradient-primary);
+  transform: scale(1.05);
+}
+
+.year-badge {
+  background: rgba(30, 41, 59, 0.1);
+  color: var(--text-color);
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.duration-badge {
+  color: var(--text-color);
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.movie-description {
+  color: var(--text-color);
+  opacity: 0.8;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.movie-details {
+  margin-top: 1rem;
+}
+
+.rating-stars {
+  color: var(--accent-color);
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
+}
+
+/* DIPERBAIKI: Card Footer seperti Cinema Cards */
+.movie-card .card-footer {
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.8), rgba(248, 250, 252, 0.9));
+  padding: 1.2rem 1.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 3;
+}
+
+.movie-card .btn-view {
+  background: var(--gradient-primary);
+  border: none;
+  border-radius: 50px;
+  padding: 0.8rem 0;
+  font-weight: 600;
+  color: white;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  display: block;
+  text-align: center;
+}
+
+.movie-card .btn-view::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.4s ease;
+}
+
+.movie-card .btn-view:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.movie-card .btn-view:hover {
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 77, 77, 0.3);
+}
+
+/* Movie List View - EXISTING */
+.movie-list-item {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 15px;
+  overflow: hidden;
+  background: white;
+}
+
+.movie-list-item:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-medium);
+  border-color: var(--primary-color);
+}
+
+.movie-list-poster {
+  max-height: 180px;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.movie-list-item:hover .movie-list-poster {
+  transform: scale(1.05);
+}
+
+.movie-list-item .movie-title {
+  color: var(--secondary-color);
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.movie-list-item:hover .movie-title {
+  color: var(--primary-color);
+}
+
+.rating-container {
+  display: flex;
+  align-items: center;
+}
+
+.rating-text {
+  color: var(--text-color);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Empty State - EXISTING */
+.empty-state-content {
+  padding: 3rem 1rem;
+}
+
+.empty-state-icon {
+  font-size: 5rem;
+  opacity: 0.3;
+  margin-bottom: 2rem;
+}
+
+.empty-state-content h3 {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state-content p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* Loading Spinner - EXISTING */
+.loading-spinner {
+  padding: 4rem 0;
+}
+
+.loading-spinner .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  border-width: 0.3rem;
+}
+
+.loading-spinner p {
+  font-size: 1.1rem;
+  margin-top: 1rem;
+  color: var(--text-color);
+}
+
+/* Pagination Styles - EXISTING */
+.pagination-section {
+  background: rgba(248, 250, 252, 0.8);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.pagination-info {
+  font-size: 0.95rem;
+  color: var(--text-color);
+}
+
+.pagination .page-link {
+  border: none;
+  color: var(--text-color);
+  padding: 0.75rem 1rem;
+  margin: 0 0.1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.pagination .page-link:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 77, 77, 0.3);
+}
+
+.pagination .page-item.active .page-link {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(255, 77, 77, 0.3);
+}
+
+.pagination .page-item.disabled .page-link {
+  color: rgba(108, 117, 125, 0.5);
+  background: none;
+}
+
+/* Movie Detail Modal - EXISTING */
+.modal-content {
+  border: none;
+  border-radius: 20px;
+  box-shadow: var(--shadow-heavy);
+  overflow: hidden;
+}
+
+.modal-header {
+  background: var(--gradient-primary);
+  color: white;
+  border-bottom: none;
+  padding: 1.5rem 2rem;
+}
+
+.modal-header .btn-close {
+  filter: invert(1);
+  opacity: 0.8;
+}
+
+.modal-header .btn-close:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.modal-body {
+  padding: 2rem;
+}
+
+.modal-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 1.5rem 2rem;
+  background: rgba(248, 250, 252, 0.5);
+}
+
+.modal .movie-title {
+  color: var(--secondary-color);
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.modal .movie-meta {
+  background: rgba(248, 250, 252, 0.8);
+  padding: 1.5rem;
+  border-radius: 15px;
+  margin-bottom: 2rem;
+}
+
+.modal .movie-meta strong {
+  color: var(--secondary-color);
+}
+
+.modal .movie-description h5 {
+  color: var(--secondary-color);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Responsive Updates - EXISTING */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 2rem 0 1.5rem;
+    text-align: center;
+  }
+
+  .page-title {
+    font-size: 2rem;
+  }
+
+  .page-subtitle {
+    font-size: 1rem;
+  }
+
+  .filter-section {
+    padding: 1.5rem 0;
+  }
+
+  .filter-card .card-body {
+    padding: 1.5rem;
+  }
+
+  .filter-card .row.mt-3 .col-12 {
+    text-align: center;
+  }
+
+  .filter-card .float-end {
+    float: none !important;
+    margin-top: 1rem;
+  }
+
+  .movie-poster-container {
+    height: 250px;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-footer {
+    padding: 1rem 1.5rem;
+  }
+
+  .btn-group-vertical .btn {
+    margin-bottom: 0.5rem;
+  }
+
+  /* DIPERBAIKI: Label mobile */
+  .filter-card .form-label {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.6rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-header .row {
+    text-align: center;
+  }
+
+  .page-stats {
+    margin-top: 1rem;
+  }
+
+  .filter-card .col-md-3 {
+    margin-bottom: 1rem;
+  }
+
+  .movie-list-item .row {
+    text-align: center;
+  }
+
+  .movie-list-item .col-md-2,
+  .movie-list-item .col-sm-3 {
+    margin-bottom: 1rem;
+  }
+
+  .pagination {
+    justify-content: center !important;
+  }
+
+  .pagination-info {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+}
+
+/* Dark Mode Support for Movies Page - EXISTING */
+@media (prefers-color-scheme: dark) {
+  .page-header {
+    background: linear-gradient(135deg, var(--secondary-color) 0%, var(--dark-color) 100%);
+    color: white;
+  }
+
+  .page-title,
+  .page-subtitle {
+    color: white;
+  }
+
+  .breadcrumb-item.active {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .filter-section {
+    background: var(--secondary-color);
+  }
+
+  .filter-card {
+    background: var(--dark-color);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .filter-card .form-label {
+    color: white !important;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .filter-card .form-select,
+  .filter-card .form-control {
+    background: linear-gradient(145deg, 
+      rgba(255, 255, 255, 0.98) 0%, 
+      rgba(248, 250, 252, 0.95) 100%);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+
+  .movie-card,
+  .movie-list-item {
+
+    color: white;
+  }
+
+  .movie-description {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .modal-content {
+    color: white;
+  }
+}
+
+/* Animation Enhancements - EXISTING */
+.movies-section .movie-card {
+  animation: movieSlideIn 0.8s ease-out forwards;
+}
+
+.movies-section .movie-card:nth-child(odd) {
+  animation-delay: 0.1s;
+}
+
+.movies-section .movie-card:nth-child(even) {
+  animation-delay: 0.2s;
+}
+
+.movie-list-item {
+  animation: fadeInLeft 0.6s ease-out forwards;
+}
+
+.movie-list-item:nth-child(odd) {
+  animation-delay: 0.1s;
+}
+
+.movie-list-item:nth-child(even) {
+  animation-delay: 0.2s;
+}
+
+/* Custom Scrollbar for Modal - EXISTING */
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-color);
+}

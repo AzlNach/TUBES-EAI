@@ -368,8 +368,10 @@ class UpdateCinemaResponse(ObjectType):
 # ============================================================================
 
 class Query(ObjectType):
-    # Public queries
+    # Public queries (no authentication required)
     test = String()
+    publicMovies = List(MovieType)  # Add this for public access
+    publicCinemas = List(CinemaType) # Add this for public access
     
     # User authenticated queries
     movies = List(MovieType)
@@ -377,7 +379,7 @@ class Query(ObjectType):
     auditoriums = List(AuditoriumType, cinema_id=Int())
     showtimes = List(ShowtimeType, movie_id=Int(), auditorium_id=Int())
     seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))
-    coupons = List(CouponType)          # ← Tambahkan ini untuk admin
+    coupons = List(CouponType)
     availableCoupons = List(CouponType)
     my_bookings = List(BookingType)
     my_payments = List(PaymentType)
@@ -393,7 +395,61 @@ class Query(ObjectType):
     users = List(UserType)
 
     def resolve_test(self, info):
-        return "Cinema GraphQL Gateway is operational"
+        return "Cinema GraphQL API is working!"
+
+    # PUBLIC RESOLVERS - No authentication required
+    def resolve_publicMovies(self, info):  # FIXED: Method name changed
+        """Get movies for public display (no auth required)"""
+        query_data = {
+            'query': '''
+            {
+                movies {
+                    id
+                    title
+                    genre
+                    duration
+                    description
+                    releaseDate
+                    posterUrl
+                    rating
+                }
+            }
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
+        response = handle_service_response(result, 'movie', 'movies')
+        
+        if not response['success']:
+            print(f"Error fetching public movies: {response['error']}")
+            return []
+        
+        return response['data'] or []
+
+
+    def resolve_publicCinemas(self, info):  # FIXED: Method name changed
+        """Get cinemas for public display (no auth required)"""
+        query_data = {
+            'query': '''
+            {
+                cinemas {
+                    id
+                    name
+                    city
+                    capacity
+                }
+            }
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        response = handle_service_response(result, 'cinema', 'cinemas')
+        
+        if not response['success']:
+            print(f"Error fetching public cinemas: {response['error']}")
+            return []
+        
+        return response['data'] or []
 
     @require_auth
     def resolve_movies(self, info, current_user):
