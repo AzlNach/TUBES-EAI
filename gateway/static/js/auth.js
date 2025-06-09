@@ -412,12 +412,12 @@ class AuthService {
 
     static async getShowtimesForDisplay(movieId = null, auditoriumId = null) {
         const query = `
-            query GetShowtimes($movie_id: Int, $auditorium_id: Int) {
-                showtimes(movie_id: $movie_id, auditorium_id: $auditorium_id) {
+            query GetShowtimes($movieId: Int, $auditoriumId: Int) {
+                showtimes(movieId: $movieId, auditoriumId: $auditoriumId) {
                     id
-                    movie_id
-                    auditorium_id
-                    start_time
+                    movieId
+                    auditoriumId
+                    startTime
                     price
                     movie {
                         id
@@ -443,8 +443,8 @@ class AuthService {
 
         try {
             const variables = {};
-            if (movieId) variables.movie_id = parseInt(movieId);
-            if (auditoriumId) variables.auditorium_id = parseInt(auditoriumId);
+            if (movieId) variables.movieId = parseInt(movieId);
+            if (auditoriumId) variables.auditoriumId = parseInt(auditoriumId);
 
             console.log('GraphQL query variables:', variables);
             console.log('GraphQL query being sent:', query);
@@ -455,7 +455,6 @@ class AuthService {
             
             if (result.errors) {
                 console.error('GraphQL errors:', result.errors);
-                // Don't return empty array, let's show the actual error
                 result.errors.forEach(error => {
                     console.error('GraphQL Error Detail:', error.message);
                     console.error('Error locations:', error.locations);
