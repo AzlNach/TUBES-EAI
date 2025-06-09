@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Movies - Cinema Booking System</title>
+  <title>Cinemas - Cinema Booking System</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Font Awesome -->
@@ -31,12 +31,12 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link active" href="/movies">
+            <a class="nav-link" href="/movies">
               <i class="fas fa-video me-1"></i> Movies
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="/cinemas">
+            <a class="nav-link active" href="/cinemas">
               <i class="fas fa-building me-1"></i> Cinemas
             </a>
           </li>
@@ -65,18 +65,18 @@
                   <i class="fas fa-home me-1"></i>Home
                 </a>
               </li>
-              <li class="breadcrumb-item active" aria-current="page">Movies</li>
+              <li class="breadcrumb-item active" aria-current="page">Cinemas</li>
             </ol>
           </nav>
           <h1 class="page-title mb-0">
-            <i class="fas fa-film me-3"></i>Browse Movies
+            <i class="fas fa-building me-3"></i>Browse Cinemas
           </h1>
-          <p class="page-subtitle mb-0">Discover and book tickets for the latest movies</p>
+          <p class="page-subtitle mb-0">Find the perfect cinema for your movie experience</p>
         </div>
         <div class="col-md-4 text-end">
           <div class="page-stats">
-            <span class="badge bg-primary fs-6" id="movie-count">
-              <i class="fas fa-video me-1"></i>Loading...
+            <span class="badge bg-primary fs-6" id="cinema-count">
+              <i class="fas fa-building me-1"></i>Loading...
             </span>
           </div>
         </div>
@@ -91,32 +91,31 @@
         <div class="card-body">
           <div class="row align-items-center">
             <div class="col-md-3">
-              <label for="genre-filter" class="form-label fw-semibold">
-                <i class="fas fa-tags me-2"></i>Filter by Genre
+              <label for="city-filter" class="form-label fw-semibold">
+                <i class="fas fa-map-marker-alt me-2"></i>Filter by City
               </label>
-              <select class="form-select" id="genre-filter">
-                <option value="">All Genres</option>
-                <option value="Action">Action</option>
-                <option value="Crime">Crime</option>
-                <option value="Fantasy">Fantasy</option>
-                <option value="Comedy">Comedy</option>
-                <option value="Drama">Drama</option>
-                <option value="Horror">Horror</option>
-                <option value="Romance">Romance</option>
-                <option value="Sci-Fi">Sci-Fi</option>
-                <option value="Thriller">Thriller</option>
+              <select class="form-select" id="city-filter">
+                <option value="">All Cities</option>
+                <option value="Jakarta Pusat">Jakarta Pusat</option>
+                <option value="Jakarta Barat">Jakarta Barat</option>
+                <option value="Jakarta Utara">Jakarta Utara</option>
+                <option value="Jakarta Selatan">Jakarta Selatan</option>
+                <option value="Jakarta Timur">Jakarta Timur</option>
+                <option value="Bandung">Bandung</option>
+                <option value="Surabaya">Surabaya</option>
+                <option value="Medan">Medan</option>
               </select>
             </div>
             <div class="col-md-3">
-              <label for="rating-filter" class="form-label fw-semibold">
-                <i class="fas fa-star me-2"></i>Minimum Rating
+              <label for="capacity-filter" class="form-label fw-semibold">
+                <i class="fas fa-users me-2"></i>Minimum Capacity
               </label>
-              <select class="form-select" id="rating-filter">
-                <option value="">Any Rating</option>
-                <option value="8">8+ Stars</option>
-                <option value="7">7+ Stars</option>
-                <option value="6">6+ Stars</option>
-                <option value="5">5+ Stars</option>
+              <select class="form-select" id="capacity-filter">
+                <option value="">Any Capacity</option>
+                <option value="200">200+ Seats</option>
+                <option value="150">150+ Seats</option>
+                <option value="100">100+ Seats</option>
+                <option value="50">50+ Seats</option>
               </select>
             </div>
             <div class="col-md-3">
@@ -124,18 +123,17 @@
                 <i class="fas fa-sort me-2"></i>Sort By
               </label>
               <select class="form-select" id="sort-filter">
-                <option value="title">Title (A-Z)</option>
-                <option value="rating">Rating (High to Low)</option>
-                <option value="duration">Duration</option>
-                <option value="genre">Genre</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="capacity">Capacity (High to Low)</option>
+                <option value="city">City</option>
               </select>
             </div>
             <div class="col-md-3">
               <label for="search-input" class="form-label fw-semibold">
-                <i class="fas fa-search me-2"></i>Search Movies
+                <i class="fas fa-search me-2"></i>Search Cinemas
               </label>
               <div class="input-group">
-                <input type="text" class="form-control text-white" id="search-input" placeholder="Search by title..." style="background-color: transparent; border-color: #495057;">
+                <input type="text" class="form-control text-white" id="search-input" placeholder="Search by name..." style="background-color: transparent; border-color: #495057;">
                 <button class="btn btn-outline-primary" type="button" id="clear-search">
                   <i class="fas fa-times"></i>
                 </button>
@@ -167,39 +165,39 @@
     </div>
   </section>
 
-  <!-- Movies Grid Section -->
-  <section class="movies-section py-5">
+  <!-- Cinemas Grid Section -->
+  <section class="cinemas-section py-5">
     <div class="container">
       <!-- Loading State -->
       <div class="row" id="loading-container">
         <div class="col-12 text-center">
           <div class="loading-spinner">
             <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
-              <span class="visually-hidden">Loading movies...</span>
+              <span class="visually-hidden">Loading cinemas...</span>
             </div>
-            <p class="text-muted">Loading movies...</p>
+            <p class="text-muted">Loading cinemas...</p>
           </div>
         </div>
       </div>
 
-      <!-- Movies Grid Container -->
-      <div class="row g-4" id="movies-grid" style="display: none;">
-        <!-- Movies will be dynamically loaded here -->
+      <!-- Cinemas Grid Container -->
+      <div class="row g-4" id="cinemas-grid" style="display: none;">
+        <!-- Cinemas will be dynamically loaded here -->
       </div>
 
-      <!-- Movies List Container -->
-      <div class="row" id="movies-list" style="display: none;">
-        <!-- Movies list view will be dynamically loaded here -->
+      <!-- Cinemas List Container -->
+      <div class="row" id="cinemas-list" style="display: none;">
+        <!-- Cinemas list view will be dynamically loaded here -->
       </div>
 
       <!-- Empty State -->
       <div class="row" id="empty-state" style="display: none;">
         <div class="col-12 text-center py-5">
           <div class="empty-state-content">
-            <i class="fas fa-film empty-state-icon text-muted mb-4"></i>
-            <h3 class="text-muted">No Movies Found</h3>
+            <i class="fas fa-building empty-state-icon text-muted mb-4"></i>
+            <h3 class="text-muted">No Cinemas Found</h3>
             <p class="text-muted mb-4">
-              We couldn't find any movies matching your criteria.<br>
+              We couldn't find any cinemas matching your criteria.<br>
               Try adjusting your filters or search terms.
             </p>
             <button class="btn btn-primary" id="reset-filters">
@@ -214,8 +212,8 @@
         <div class="col-12 text-center py-5">
           <div class="alert alert-danger">
             <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>Error Loading Movies</strong>
-            <p class="mb-2" id="error-message">Unable to load movies at the moment.</p>
+            <strong>Error Loading Cinemas</strong>
+            <p class="mb-2" id="error-message">Unable to load cinemas at the moment.</p>
             <button class="btn btn-outline-danger" id="retry-load">
               <i class="fas fa-redo me-2"></i>Try Again
             </button>
@@ -232,11 +230,11 @@
         <div class="col-md-6">
           <p class="mb-0 text-muted" id="pagination-info">
             Showing <span id="showing-start">1</span> to <span id="showing-end">12</span> 
-            of <span id="total-movies">0</span> movies
+            of <span id="total-cinemas">0</span> cinemas
           </p>
         </div>
         <div class="col-md-6">
-          <nav aria-label="Movies pagination">
+          <nav aria-label="Cinemas pagination">
             <ul class="pagination justify-content-end mb-0" id="pagination-controls">
               <!-- Pagination controls will be dynamically generated -->
             </ul>
@@ -246,21 +244,21 @@
     </div>
   </section>
 
-  <!-- Movie Detail Modal -->
-  <div class="modal fade" id="movieDetailModal" tabindex="-1" aria-labelledby="movieDetailModalLabel" aria-hidden="true">
+  <!-- Cinema Detail Modal -->
+  <div class="modal fade" id="cinemaDetailModal" tabindex="-1" aria-labelledby="cinemaDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="movieDetailModalLabel">Movie Details</h5>
+          <h5 class="modal-title" id="cinemaDetailModalLabel">Cinema Details</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body" id="modal-movie-content">
-          <!-- Movie details will be loaded here -->
+        <div class="modal-body" id="modal-cinema-content">
+          <!-- Cinema details will be loaded here -->
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-primary" id="book-movie-btn">
-            <i class="fas fa-ticket-alt me-2"></i>Book Tickets
+          <button type="button" class="btn btn-primary" id="view-showtimes-btn">
+            <i class="fas fa-calendar-alt me-2"></i>View Showtimes
           </button>
         </div>
       </div>
@@ -321,6 +319,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Custom JS -->
   <script src="/static/js/auth.js"></script>
-  <script src="/static/js/movies.js"></script>
+  <script src="/static/js/cinemas.js"></script>
 </body>
 </html>

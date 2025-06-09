@@ -461,8 +461,8 @@ class Query(ObjectType):
             raise Exception(response['error'])
         return response['data']
 
-    @require_auth
-    def resolve_cinemas(self, info, current_user):
+
+    def resolve_cinemas(self, info):
         query_data = {'query': '{ cinemas { id name city capacity auditoriums { id name seatLayout } } }'}
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
         
@@ -1308,8 +1308,8 @@ class Query(ObjectType):
         
         return movie_data
 
-    @require_auth
-    def resolve_cinema(self, info, current_user, id):
+
+    def resolve_cinema(self, info, id):
         """Get single cinema by ID with auditoriums"""
         query_data = {
             'query': f'''
@@ -1348,8 +1348,8 @@ class Query(ObjectType):
         
         return cinema_data
     
-    @require_auth
-    def resolve_auditoriums(self, info, current_user, cinema_id=None):
+
+    def resolve_auditoriums(self, info,cinema_id=None):
         if cinema_id:
             query_data = {
                 'query': f'''
@@ -1407,8 +1407,8 @@ class Query(ObjectType):
         
         return auditoriums
     
-    @require_auth
-    def resolve_showtimes(self, info, current_user, movie_id=None, auditorium_id=None):
+
+    def resolve_showtimes(self, info,movie_id=None, auditorium_id=None):
         if movie_id:
             query_data = {
                 'query': f'''
@@ -1517,8 +1517,8 @@ class Query(ObjectType):
         
         return showtimes
     
-    @require_auth
-    def resolve_seat_statuses(self, info, current_user, showtime_id):
+
+    def resolve_seat_statuses(self, info,showtime_id):
         query_data = {
             'query': f'''
             {{

@@ -49,14 +49,15 @@ class AuthService {
         }
 
         console.log('Making GraphQL request:', { 
-            query: query.substring(0, 100) + '...', 
+            query: query.substring(0, 200) + '...', 
             variables,
             requireAuth,
-            hasToken: !!token
+            hasToken: !!token,
+            endpoint: GRAPHQL_ENDPOINT
         });
 
         try {
-            const response = await fetch('/graphql', {
+            const response = await fetch(GRAPHQL_ENDPOINT, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify({
@@ -65,15 +66,41 @@ class AuthService {
                 })
             });
 
+            console.log('GraphQL response status:', response.status);
+            console.log('GraphQL response headers:', Object.fromEntries(response.headers.entries()));
+
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error('GraphQL HTTP Error Response:', errorText);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
             }
 
             const result = await response.json();
-            console.log('GraphQL response:', result);
+            console.log('GraphQL response data:', result);
+            
             return result;
         } catch (error) {
             console.error('GraphQL Request Error:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+        static async testGraphQLConnection() {
+        try {
+            const result = await this.graphqlRequest(`
+                query {
+                    test
+                }
+            `, {}, false);
+            
+            console.log('GraphQL connection test result:', result);
+            return result;
+        } catch (error) {
+            console.error('GraphQL connection test failed:', error);
             throw error;
         }
     }
@@ -381,6 +408,71 @@ class AuthService {
         }
 
         return result.data.showtimes || [];
+    }
+
+    static async getShowtimesForDisplay(movieId = null, auditoriumId = null) {
+        const query = `
+            query GetShowtimes($movie_id: Int, $auditorium_id: Int) {
+                showtimes(movie_id: $movie_id, auditorium_id: $auditorium_id) {
+                    id
+                    movie_id
+                    auditorium_id
+                    start_time
+                    price
+                    movie {
+                        id
+                        title
+                        genre
+                        duration
+                        posterUrl
+                        rating
+                        description
+                    }
+                    auditorium {
+                        id
+                        name
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                }
+            }
+        `;
+
+        try {
+            const variables = {};
+            if (movieId) variables.movie_id = parseInt(movieId);
+            if (auditoriumId) variables.auditorium_id = parseInt(auditoriumId);
+
+            console.log('GraphQL query variables:', variables);
+            console.log('GraphQL query being sent:', query);
+            
+            const result = await this.graphqlRequest(query, variables, false);
+            
+            console.log('GraphQL result:', result);
+            
+            if (result.errors) {
+                console.error('GraphQL errors:', result.errors);
+                // Don't return empty array, let's show the actual error
+                result.errors.forEach(error => {
+                    console.error('GraphQL Error Detail:', error.message);
+                    console.error('Error locations:', error.locations);
+                });
+                return [];
+            }
+
+            const showtimes = result.data?.showtimes || [];
+            console.log('Parsed showtimes:', showtimes.length, 'items');
+            console.log('First showtime sample:', showtimes[0]);
+            
+            return showtimes;
+        } catch (error) {
+            console.error('Error in getShowtimesForDisplay:', error);
+            console.error('Error stack:', error.stack);
+            return [];
+        }
     }
 
     static async getSeatStatuses(showtimeId) {

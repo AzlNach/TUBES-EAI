@@ -205,11 +205,80 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Create movie card - UPDATED to handle login requirement for details
+    // Create movie card - UPDATED to handle login requirement for details
     function createMovieCard(movie, index) {
         const col = document.createElement('div');
         col.className = 'col-lg-4 col-md-6 mb-4';
         
-        const posterUrl = movie.posterUrl || 'https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster';
+        // DIPERBAIKI: Gunakan gambar movie yang sebenarnya dengan fallback
+        const movieImages = {
+            // Action Movies
+            'Action': [
+                'https://images.unsplash.com/photo-1489599735188-3ba5f42c6681?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1478720568477-b2709d36e4a6?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1536440136628-849c177e76a1?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ],
+            // Drama Movies  
+            'Drama': [
+                'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1489599735188-3ba5f42c6681?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1485095329183-d0797cdc5676?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ],
+            // Comedy Movies
+            'Comedy': [
+                'https://images.unsplash.com/photo-1489599735188-3ba5f42c6681?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ],
+            // Horror Movies
+            'Horror': [
+                'https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ],
+            // Sci-Fi Movies
+            'Sci-Fi': [
+                'https://images.unsplash.com/photo-1446776877081-d282a0f896e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1635805737707-575885ab0820?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ],
+            // Romance Movies
+            'Romance': [
+                'https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1485095329183-d0797cdc5676?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ],
+            // Thriller Movies
+            'Thriller': [
+                'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+                'https://images.unsplash.com/photo-1489599735188-3ba5f42c6681?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+            ]
+        };
+        
+        // Default movie images jika genre tidak ditemukan
+        const defaultImages = [
+            'https://images.unsplash.com/photo-1489599735188-3ba5f42c6681?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+            'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+            'https://images.unsplash.com/photo-1478720568477-b2709d36e4a6?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+            'https://images.unsplash.com/photo-1485095329183-d0797cdc5676?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+            'https://images.unsplash.com/photo-1536440136628-849c177e76a1?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80',
+            'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80'
+        ];
+        
+        // Pilih gambar berdasarkan genre dan index
+        let posterUrl = movie.posterUrl;
+        
+        if (!posterUrl) {
+            const genre = movie.genre || 'Default';
+            const genreImages = movieImages[genre] || defaultImages;
+            // Gunakan modulo untuk memilih gambar berdasarkan index
+            posterUrl = genreImages[index % genreImages.length];
+        }
+        
+        // Fallback final jika semua gagal
+        const finalFallback = 'https://images.unsplash.com/photo-1489599735188-3ba5f42c6681?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=450&q=80';
+        
         const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
         const stars = movie.rating ? '★'.repeat(Math.round(movie.rating / 2)) : '';
         
@@ -220,7 +289,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         col.innerHTML = `
             <div class="card movie-card h-100">
-                <img src="${posterUrl}" class="card-img-top movie-poster" alt="${movie.title}">
+                <img src="${posterUrl}" 
+                    class="card-img-top movie-poster" 
+                    alt="${movie.title}"
+                    onerror="this.onerror=null; this.src='${finalFallback}'">
                 <div class="card-body">
                     <h5 class="card-title">${movie.title}</h5>
                     <div class="mb-2">

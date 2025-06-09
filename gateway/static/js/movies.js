@@ -431,20 +431,19 @@ function createMovieCard(movie, index) {
     const col = document.createElement('div');
     col.className = 'col-lg-4 col-md-6 col-sm-6 mb-4';
     
-    // Handle missing poster URL
+    // DIPERBAIKI: Handle posterUrl dari database dengan prioritas
     const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster';
     
-    // Handle rating display
+    // DIPERBAIKI: Handle rating display dengan parsing yang benar
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
-    const stars = movie.rating ? '★'.repeat(Math.round(movie.rating / 2)) : '☆☆☆☆☆';
+    const stars = movie.rating ? '★'.repeat(Math.round(parseFloat(movie.rating) / 2)) : '☆☆☆☆☆';
     
     // Handle release date
     const releaseDate = movie.releaseDate || movie.release_date || null;
     const releaseDateDisplay = releaseDate ? new Date(releaseDate).getFullYear() : 'TBD';
     
     // DIPERBAIKI: Gunakan logika yang sama dengan main.js untuk button handling
-    const buttonOnClick = isLoggedIn ? `onclick="showMovieDetail(${movie.id})"` : 'onclick="handleLoginRequired(event, \'movie details\')"';
-    const bookingOnClick = isLoggedIn ? `onclick="handleMovieBooking(${movie.id})"` : 'onclick="handleLoginRequired(event, \'movie booking\')"';
+    const buttonOnClick = `onclick="showMovieDetail(${movie.id})"`;
     
     // DIPERBAIKI: Struktur HTML yang sesuai dengan CSS styling
     col.innerHTML = `
@@ -488,7 +487,7 @@ function createMovieCard(movie, index) {
             <div class="card-footer">
                 <a href="#" class="btn-view" ${buttonOnClick}>
                     <i class="fas fa-ticket-alt me-2"></i>
-                    ${isLoggedIn ? 'Book Tickets' : 'Login to Book'}
+                    ${isLoggedIn ? 'Book Tickets' : 'View Details'}
                 </a>
             </div>
         </div>
@@ -714,46 +713,56 @@ function changePage(page) {
 
 // Show movie detail modal - DIPERBAIKI: HANDLE AUTH REQUIREMENT
 async function showMovieDetail(movieId) {
-    if (!isLoggedIn) {
-        handleLoginRequired(event, 'movie details');
-        return;
-    }
-    
     try {
         console.log('Loading movie detail for ID:', movieId);
         
         // Show loading in modal
-        elements.modalMovieContent.innerHTML = `
-            <div class="text-center py-4">
-                <div class="spinner-border text-primary mb-3" role="status">
-                    <span class="visually-hidden">Loading movie details...</span>
+        if (elements.modalMovieContent) {
+            elements.modalMovieContent.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading movie details...</span>
+                    </div>
+                    <p>Loading movie details...</p>
                 </div>
-                <p>Loading movie details...</p>
-            </div>
-        `;
+            `;
+        }
         
         // Show modal
         const modal = new bootstrap.Modal(elements.movieDetailModal);
         modal.show();
         
-        // Get movie details from local data first
+        // Get movie details from local data first (no auth required for basic details)
         const localMovie = allMovies.find(m => m.id == movieId);
         if (localMovie) {
             renderMovieDetailModal(localMovie);
-            elements.bookMovieBtn.dataset.movieId = movieId;
-        } else {
-            // If not found locally, try to fetch from API (for authenticated users)
-            const result = await AuthService.graphqlRequest(MOVIE_QUERIES.GET_MOVIE, { id: parseInt(movieId) }, true);
-            
-            if (result && result.data && result.data.movie) {
-                const movie = result.data.movie;
-                renderMovieDetailModal(movie);
+            if (elements.bookMovieBtn) {
                 elements.bookMovieBtn.dataset.movieId = movieId;
+            }
+        } else {
+            // If not found locally and user is logged in, try to fetch from API
+            if (isLoggedIn) {
+                const result = await AuthService.graphqlRequest(MOVIE_QUERIES.GET_MOVIE, { id: parseInt(movieId) }, true);
+                
+                if (result && result.data && result.data.movie) {
+                    const movie = result.data.movie;
+                    renderMovieDetailModal(movie);
+                    if (elements.bookMovieBtn) {
+                        elements.bookMovieBtn.dataset.movieId = movieId;
+                    }
+                } else {
+                    elements.modalMovieContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Movie details not found.
+                        </div>
+                    `;
+                }
             } else {
                 elements.modalMovieContent.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Movie details not found.
+                    <div class="alert alert-warning">
+                        <i class="fas fa-sign-in-alt me-2"></i>
+                        Movie details not found in local cache. Please <a href="/login" class="alert-link">login</a> for full access.
                     </div>
                 `;
             }
@@ -761,12 +770,14 @@ async function showMovieDetail(movieId) {
         
     } catch (error) {
         console.error('Error loading movie detail:', error);
-        elements.modalMovieContent.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Error loading movie details. Please try again.
-            </div>
-        `;
+        if (elements.modalMovieContent) {
+            elements.modalMovieContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading movie details. Please try again.
+                </div>
+            `;
+        }
     }
 }
 
@@ -774,7 +785,7 @@ async function showMovieDetail(movieId) {
 function renderMovieDetailModal(movie) {
     const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster';
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
-    const stars = movie.rating ? '★'.repeat(Math.round(movie.rating / 2)) : '☆☆☆☆☆';
+    const stars = movie.rating ? '★'.repeat(Math.round(parseFloat(movie.rating) / 2)) : '☆☆☆☆☆';
     const releaseDate = movie.releaseDate || movie.release_date || null;
     const releaseDateDisplay = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'To be determined';
     
