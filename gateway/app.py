@@ -1,8 +1,12 @@
-from flask import Flask, request
+from flask import Flask, request, send_from_directory, send_file
 from flask_graphql import GraphQLView
 from schema import schema
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, 
+           static_folder='static',
+           static_url_path='/static')
+
 
 # Middleware untuk menambahkan headers ke context
 def add_context(request):
@@ -21,6 +25,37 @@ app.add_url_rule(
         get_context=lambda: add_context(request)
     )
 )
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory(app.static_folder, filename)
+
+@app.route('/login')
+def login_page():
+    return send_file('./static/templates/login.html')
+
+@app.route('/register')
+def register_page():
+    return send_file('./static/templates/register.html')
+
+@app.route('/movies')
+def movies_page():
+    return send_file('./static/templates/movies.html')
+
+# ADD THIS: Cinemas page route (untuk konsistensi)
+@app.route('/cinemas')
+def cinemas_page():
+    return send_file('./static/templates/cinemas.html')
+
+# ADD THIS: Showtimes page route (untuk konsistensi)
+@app.route('/showtimes')
+def showtimes_page():
+    return send_file('./static/templates/showtimes.html')
+
+
+@app.route('/dashboard')
+def dashboard_page():
+    return send_file('./static/templates/index.html')
 
 @app.route('/')
 def index():
@@ -73,6 +108,33 @@ def index():
     </body>
     </html>
     '''
+
+# Admin routes
+@app.route('/admin')
+def admin_dashboard():
+    return send_file('./static/admin/templates/dashboard.html')
+
+@app.route('/admin/movies')
+def admin_movies():
+    return send_file('./static/admin/templates/movies.html')
+
+@app.route('/admin/cinemas') 
+def admin_cinemas():
+    return send_file('./static/admin/templates/cinemas.html')
+
+@app.route('/admin/users')
+def admin_users():
+    return send_file('./static/admin/templates/users.html')
+
+@app.route('/admin/bookings')
+def admin_bookings():
+    return send_file('./static/admin/templates/bookings.html')
+
+@app.route('/admin/login')
+def admin_login():
+    return send_file('./static/admin/templates/login.html')
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

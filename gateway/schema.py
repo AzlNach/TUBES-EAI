@@ -2,7 +2,7 @@ import graphene
 import requests
 import json
 import os
-from graphene import ObjectType, String, Int, Float, List, Field, Mutation, Schema, Boolean
+from graphene import ObjectType, String, Int, Float, List, Field, Mutation, Schema, Boolean, JSONString, DateTime
 from functools import wraps
 
 # Service URLs
@@ -167,25 +167,81 @@ class MovieType(ObjectType):
     duration = Int()
     description = String()
     releaseDate = String()
+    posterUrl = String()    # Added poster URL
+    rating = Float()        # Added rating
 
 class CinemaType(ObjectType):
     id = Int()
     name = String()
-    location = String()
+    city = String()  # Changed from location to city
     capacity = Int()
+    auditoriums = List(lambda: AuditoriumType)
 
-class BookingType(ObjectType):
-    """Booking type - disesuaikan dengan booking service schema"""
+class AuditoriumType(ObjectType):
     id = Int()
-    userId = Int()      # Booking service menggunakan userId (camelCase)
-    movieId = Int()     # Booking service menggunakan movieId (camelCase)
-    cinemaId = Int()    # Booking service menggunakan cinemaId (camelCase)
-    showtime = String()
-    seats = String()
-    totalPrice = Float()  # Booking service menggunakan totalPrice (camelCase)
-    status = String()
-    bookingDate = String()  # Booking service menggunakan bookingDate (camelCase)
+    cinema_id = Int()
+    name = String()
+    seat_layout = JSONString()
+    cinema = Field(CinemaType)
+    
+class ShowtimeType(ObjectType):
+    id = Int()
+    movie_id = Int()
+    auditorium_id = Int()
+    start_time = DateTime()
+    price = Float()
+    auditorium = Field(AuditoriumType)
+    movie = Field(MovieType)
 
+class SeatStatusType(ObjectType):
+    id = Int()
+    showtime_id = Int()
+    seat_number = String()
+    status = String()
+    booking_id = Int()
+    updated_at = DateTime()
+    
+class TicketType(ObjectType):
+    id = Int()
+    bookingId = Int()        
+    seatNumber = String() 
+    
+    def resolve_bookingId(self, info):
+        # Handle dict data (from service response) and object data (from model)
+        if isinstance(self, dict):
+            return self.get('bookingId') or self.get('booking_id')
+        return self.booking_id if hasattr(self, 'booking_id') else getattr(self, 'bookingId', None)
+        
+    def resolve_seatNumber(self, info):
+        # Handle dict data (from service response) and object data (from model)
+        if isinstance(self, dict):
+            return self.get('seatNumber') or self.get('seat_number')
+        return self.seat_number if hasattr(self, 'seat_number') else getattr(self, 'seatNumber', None)
+    
+class BookingType(ObjectType):
+    """Updated booking type for new structure"""
+    id = Int()
+    user_id = Int()
+    showtime_id = Int()  
+    status = String()
+    total_price = Float()
+    booking_date = String()
+    tickets = List(TicketType)
+    
+    def resolve_userId(self, info):
+        return self.user_id if hasattr(self, 'user_id') else getattr(self, 'userId', None)
+    
+    def resolve_showtimeId(self, info):
+        return self.showtime_id if hasattr(self, 'showtime_id') else getattr(self, 'showtimeId', None)
+        
+    def resolve_totalPrice(self, info):
+        return float(self.total_price) if hasattr(self, 'total_price') and self.total_price else getattr(self, 'totalPrice', None)
+        
+    def resolve_bookingDate(self, info):
+        if hasattr(self, 'booking_date') and self.booking_date:
+            return self.booking_date.isoformat()
+        return getattr(self, 'bookingDate', None)
+    
 class PaymentType(ObjectType):
     """Payment type - consistent with payment service schema"""
     id = Int()
@@ -198,7 +254,30 @@ class PaymentType(ObjectType):
     createdAt = String()        # Changed from created_at to createdAt
     updatedAt = String()        # Changed from updated_at to updatedAt
     canBeDeleted = Boolean()    # Changed from can_be_deleted to canBeDeleted
+    booking = Field(lambda: EnrichedBookingType)  # Add enriched booking data
 
+class EnrichedBookingType(ObjectType):
+    """Enriched booking type for payment details"""
+    id = Int()
+    userId = Int()           # Changed from user_id to userId (camelCase)
+    showtimeId = Int()       # Changed from showtime_id to showtimeId (camelCase)
+    status = String()
+    totalPrice = Float()     # Changed from total_price to totalPrice (camelCase)
+    bookingDate = String()   # Changed from booking_date to bookingDate (camelCase)
+    user = Field(UserType)   # For admin view
+    showtime = Field(lambda: EnrichedShowtimeType)
+    tickets = List(TicketType)
+
+class EnrichedShowtimeType(ObjectType):
+    """Enriched showtime type for payment details"""
+    id = Int()
+    movieId = Int()          # Changed from movie_id to movieId (camelCase)
+    auditoriumId = Int()     # Changed from auditorium_id to auditoriumId (camelCase)
+    startTime = String()     # Changed from DateTime() to String() to avoid compatibility issues
+    price = Float()
+    auditorium = Field(AuditoriumType)
+    movie = Field(MovieType)
+    
 class CouponType(ObjectType):
     id = Int()
     code = String()
@@ -231,6 +310,21 @@ class UpdateMovieResponse(ObjectType):
     
 class CreateCinemaResponse(ObjectType):
     cinema = Field(CinemaType)
+    success = Boolean()
+    message = String()
+
+class CreateAuditoriumResponse(ObjectType):
+    auditorium = Field(AuditoriumType)
+    success = Boolean()
+    message = String()
+
+class CreateShowtimeResponse(ObjectType):
+    showtime = Field(ShowtimeType)
+    success = Boolean()
+    message = String()
+
+class UpdateSeatStatusResponse(ObjectType):
+    seat_status = Field(SeatStatusType)
     success = Boolean()
     message = String()
 
@@ -274,13 +368,18 @@ class UpdateCinemaResponse(ObjectType):
 # ============================================================================
 
 class Query(ObjectType):
-    # Public queries
+    # Public queries (no authentication required)
     test = String()
+    publicMovies = List(MovieType)  # Add this for public access
+    publicCinemas = List(CinemaType) # Add this for public access
     
     # User authenticated queries
     movies = List(MovieType)
     cinemas = List(CinemaType)
-    coupons = List(CouponType)          # ← Tambahkan ini untuk admin
+    auditoriums = List(AuditoriumType, cinema_id=Int())
+    showtimes = List(ShowtimeType, movie_id=Int(), auditorium_id=Int())
+    seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))
+    coupons = List(CouponType)
     availableCoupons = List(CouponType)
     my_bookings = List(BookingType)
     my_payments = List(PaymentType)
@@ -296,7 +395,61 @@ class Query(ObjectType):
     users = List(UserType)
 
     def resolve_test(self, info):
-        return "Cinema GraphQL Gateway is operational"
+        return "Cinema GraphQL API is working!"
+
+    # PUBLIC RESOLVERS - No authentication required
+    def resolve_publicMovies(self, info):  # FIXED: Method name changed
+        """Get movies for public display (no auth required)"""
+        query_data = {
+            'query': '''
+            {
+                movies {
+                    id
+                    title
+                    genre
+                    duration
+                    description
+                    releaseDate
+                    posterUrl
+                    rating
+                }
+            }
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
+        response = handle_service_response(result, 'movie', 'movies')
+        
+        if not response['success']:
+            print(f"Error fetching public movies: {response['error']}")
+            return []
+        
+        return response['data'] or []
+
+
+    def resolve_publicCinemas(self, info):  # FIXED: Method name changed
+        """Get cinemas for public display (no auth required)"""
+        query_data = {
+            'query': '''
+            {
+                cinemas {
+                    id
+                    name
+                    city
+                    capacity
+                }
+            }
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        response = handle_service_response(result, 'cinema', 'cinemas')
+        
+        if not response['success']:
+            print(f"Error fetching public cinemas: {response['error']}")
+            return []
+        
+        return response['data'] or []
 
     @require_auth
     def resolve_movies(self, info, current_user):
@@ -308,16 +461,28 @@ class Query(ObjectType):
             raise Exception(response['error'])
         return response['data']
 
-    @require_auth
-    def resolve_cinemas(self, info, current_user):
-        query_data = {'query': '{ cinemas { id name location capacity } }'}
+
+    def resolve_cinemas(self, info):
+        query_data = {'query': '{ cinemas { id name city capacity auditoriums { id name seatLayout } } }'}
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
         
         response = handle_service_response(result, 'cinema', 'cinemas')
         if not response['success']:
             raise Exception(response['error'])
-        return response['data']
-
+        
+        # Transform camelCase response to snake_case for gateway types
+        cinemas = response['data']
+        if cinemas:
+            for cinema in cinemas:
+                # Transform auditoriums nested data
+                if 'auditoriums' in cinema and cinema['auditoriums']:
+                    for auditorium in cinema['auditoriums']:
+                        # Transform camelCase to snake_case to match gateway AuditoriumType
+                        if 'seatLayout' in auditorium:
+                            auditorium['seat_layout'] = auditorium.pop('seatLayout')
+        
+        return cinemas
+    
     @require_auth
     def resolve_availableCoupons(self, info, current_user):  # ← Changed method name
         query_data = {'query': '{ availableCoupons { id code name discountPercentage validUntil isActive } }'}
@@ -341,21 +506,115 @@ class Query(ObjectType):
 
     @require_auth
     def resolve_my_bookings(self, info, current_user):
-        """Query disesuaikan dengan booking service schema (camelCase)"""
+        """Get user's bookings with updated booking structure"""
         user_id = current_user['user_id']
-        query = f'{{ userBookings(userId: {user_id}) {{ id userId movieId cinemaId showtime seats totalPrice status bookingDate }} }}'
+        query = f'''
+        {{ 
+            userBookings(userId: {user_id}) {{ 
+                id 
+                userId 
+                showtimeId 
+                status 
+                totalPrice 
+                bookingDate 
+            }} 
+        }}
+        '''
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
         
         response = handle_service_response(result, 'booking', 'userBookings')
         if not response['success']:
             raise Exception(response['error'])
-        return response['data']
+        
+        # Enrich bookings with ticket details (same pattern as payment queries)
+        bookings = response['data'] or []
+        
+        for booking in bookings:
+            booking_id = booking.get('id')
+            print(f"Processing booking {booking_id} for user {user_id}")  # Debug log
+            
+            if booking_id:
+                # Get tickets for this booking (same pattern as payment queries)
+                tickets_query = {
+                    'query': f'''
+                    {{
+                        tickets(bookingId: {booking_id}) {{
+                            id
+                            bookingId
+                            seatNumber
+                        }}
+                    }}
+                    '''
+                }
+                
+                tickets_result = make_service_request(SERVICE_URLS['booking'], tickets_query, 'booking')
+                print(f"Tickets service response for booking {booking_id}: {tickets_result}")  # Debug log
+                
+                if tickets_result and not tickets_result.get('errors'):
+                    tickets_data = tickets_result.get('data', {}).get('tickets', [])
+                    print(f"Raw tickets data for booking {booking_id}: {tickets_data}")  # Debug log
+                    
+                    # Use same ticket transformation as payment queries
+                    from types import SimpleNamespace
+                    
+                    transformed_tickets = []
+                    for ticket in tickets_data:
+                        print(f"Processing ticket: {ticket}")  # Debug log
+                        
+                        # Handle both possible field name formats from the booking service
+                        ticket_id = ticket.get('id')
+                        booking_id_field = ticket.get('bookingId') or ticket.get('booking_id')
+                        seat_number_field = ticket.get('seatNumber') or ticket.get('seat_number')
+                        
+                        print(f"Ticket fields - id: {ticket_id}, bookingId: {booking_id_field}, seatNumber: {seat_number_field}")  # Debug log
+                        
+                        # Create an object-like structure instead of dict (same as payment queries)
+                        ticket_obj = SimpleNamespace()
+                        ticket_obj.id = ticket_id
+                        ticket_obj.bookingId = booking_id_field
+                        ticket_obj.seatNumber = seat_number_field
+                        
+                        # Also set snake_case variants for field resolvers
+                        ticket_obj.booking_id = booking_id_field
+                        ticket_obj.seat_number = seat_number_field
+                        
+                        transformed_tickets.append(ticket_obj)
+                        print(f"Created ticket object: id={ticket_obj.id}, bookingId={ticket_obj.bookingId}, seatNumber={ticket_obj.seatNumber}")  # Debug log
+                    
+                    # Set tickets directly on booking object
+                    booking['tickets'] = transformed_tickets
+                    print(f"Final transformed tickets count for booking {booking_id}: {len(transformed_tickets)}")  # Debug log
+                else:
+                    print(f"Tickets service failed for booking {booking_id}: {tickets_result}")
+                    booking['tickets'] = []
+            else:
+                print(f"No booking ID found for booking: {booking}")
+                booking['tickets'] = []
+        
+        # Transform camelCase response to snake_case for gateway BookingType
+        if bookings:
+            transformed_bookings = []
+            for booking in bookings:
+                transformed_booking = {
+                    'id': booking.get('id'),
+                    'user_id': booking.get('userId'),  # Transform camelCase to snake_case
+                    'showtime_id': booking.get('showtimeId'),  # Transform camelCase to snake_case
+                    'status': booking.get('status'),
+                    'total_price': booking.get('totalPrice'),  # Transform camelCase to snake_case
+                    'booking_date': booking.get('bookingDate'),  # Transform camelCase to snake_case
+                    'tickets': booking.get('tickets')  # Keep the enriched tickets
+                }
+                transformed_bookings.append(transformed_booking)
+            return transformed_bookings
+        
+        return bookings
 
     @require_auth
     def resolve_my_payments(self, info, current_user):
         user_id = current_user['user_id']
-        query = f'{{ userPayments(userId: {user_id}) {{ id userId bookingId amount paymentMethod paymentProofImage createdAt updatedAt canBeDeleted }} }}'
+        # Updated query to request all fields including paymentProofImage
+        query = f'{{ userPayments(userId: {user_id}) {{ id userId bookingId amount paymentMethod paymentProofImage status createdAt updatedAt canBeDeleted }} }}'
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['payment'], query_data, 'payment')
         
@@ -363,28 +622,368 @@ class Query(ObjectType):
         if not response['success']:
             raise Exception(response['error'])
         
-        # Add virtual status to each payment
-        payments = response['data']
-        for payment in payments:
-            payment['status'] = 'PAID'  # ← Changed to uppercase - All payments are considered 'PAID'
+        # Enrich payments with booking, showtime, seat, and movie details
+        payments = response['data'] or []
         
+        for payment in payments:
+            # Handle missing fields with defaults but keep actual values if they exist
+            if payment.get('paymentMethod') is None:
+                payment['paymentMethod'] = 'CREDIT_CARD'
+            if payment.get('createdAt') is None:
+                payment['createdAt'] = '2024-01-01T00:00:00Z'
+            if payment.get('updatedAt') is None:
+                payment['updatedAt'] = '2024-01-01T00:00:00Z'
+            if payment.get('canBeDeleted') is None:
+                payment['canBeDeleted'] = True
+            
+            # Get booking details - ensure we have bookingId
+            booking_id = payment.get('bookingId')
+            print(f"Processing payment {payment.get('id')} with bookingId: {booking_id}")  # Debug log
+            
+            if booking_id:
+                # Use the same pattern as resolve_showtimes for fetching related data
+                booking_query = {
+                    'query': f'''
+                    {{
+                        booking(id: {booking_id}) {{
+                            id
+                            userId
+                            showtimeId
+                            status
+                            totalPrice
+                            bookingDate
+                        }}
+                    }}
+                    '''
+                }
+                
+                print(f"Querying booking service with: {booking_query}")  # Debug log
+                booking_result = make_service_request(SERVICE_URLS['booking'], booking_query, 'booking')
+                print(f"Booking service response: {booking_result}")  # Debug log
+                
+                # Handle booking response like resolve_showtimes handles movie response
+                if booking_result and not booking_result.get('errors'):
+                    booking_data = booking_result.get('data', {}).get('booking')
+                    print(f"Booking data extracted: {booking_data}")  # Debug log
+                    
+                    if booking_data:
+                        # Transform to camelCase for EnrichedBookingType (like resolve_showtimes does)
+                        payment['booking'] = {
+                            'id': booking_data.get('id'),
+                            'userId': booking_data.get('userId'),
+                            'showtimeId': booking_data.get('showtimeId'),
+                            'status': booking_data.get('status'),
+                            'totalPrice': booking_data.get('totalPrice'),
+                            'bookingDate': booking_data.get('bookingDate')
+                        }
+                        
+                        # Update payment status to match booking status
+                        payment['status'] = booking_data.get('status', payment.get('status', 'UNKNOWN'))
+                        
+                        # Get showtime details
+                        showtime_id = booking_data.get('showtimeId')
+                        print(f"Fetching showtime with ID: {showtime_id}")  # Debug log
+                        
+                        if showtime_id:
+                            showtime_query = {
+                                'query': f'''
+                                {{
+                                    showtime(id: {showtime_id}) {{
+                                        id
+                                        movieId
+                                        auditoriumId
+                                        startTime
+                                        price
+                                        auditorium {{
+                                            id
+                                            name
+                                            cinema {{
+                                                id
+                                                name
+                                                city
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                                '''
+                            }
+                            
+                            showtime_result = make_service_request(SERVICE_URLS['cinema'], showtime_query, 'cinema')
+                            print(f"Showtime service response: {showtime_result}")  # Debug log
+                            
+                            if showtime_result and not showtime_result.get('errors'):
+                                showtime_data = showtime_result.get('data', {}).get('showtime')
+                                print(f"Showtime data extracted: {showtime_data}")  # Debug log
+                                
+                                if showtime_data:
+                                    # Fix startTime handling - convert to string if it's a datetime object
+                                    start_time = showtime_data.get('startTime')
+                                    if start_time:
+                                        # Convert datetime to string if needed
+                                        if isinstance(start_time, str):
+                                            # Remove extra quotes if present
+                                            start_time = start_time.strip("'\"")
+                                        else:
+                                            # Convert datetime object to string
+                                            try:
+                                                start_time = start_time.isoformat() if hasattr(start_time, 'isoformat') else str(start_time)
+                                            except:
+                                                start_time = str(start_time)
+                                    
+                                    # Keep camelCase for EnrichedShowtimeType (like resolve_showtimes pattern)
+                                    payment['booking']['showtime'] = {
+                                        'id': showtime_data.get('id'),
+                                        'movieId': showtime_data.get('movieId'),
+                                        'auditoriumId': showtime_data.get('auditoriumId'),
+                                        'startTime': start_time,  # Use the properly formatted startTime
+                                        'price': showtime_data.get('price'),
+                                        'auditorium': showtime_data.get('auditorium')
+                                    }
+                                    
+                                    # Get movie details (following the exact same pattern as resolve_showtimes)
+                                    movie_id_value = showtime_data.get('movieId')
+                                    print(f"Fetching movie with ID: {movie_id_value}")  # Debug log
+                                    
+                                    if movie_id_value:
+                                        movie_query = {
+                                            'query': f'''
+                                            {{
+                                                movie(id: {movie_id_value}) {{
+                                                    id
+                                                    title
+                                                    genre
+                                                    duration
+                                                    description
+                                                    releaseDate
+                                                    posterUrl
+                                                    rating
+                                                }}
+                                            }}
+                                            '''
+                                        }
+                                        
+                                        movie_result = make_service_request(SERVICE_URLS['movie'], movie_query, 'movie')
+                                        print(f"Movie service response: {movie_result}")  # Debug log
+                                        
+                                        if movie_result and not movie_result.get('errors'):
+                                            movie_data = movie_result.get('data', {}).get('movie')
+                                            if movie_data:
+                                                # Add movie details to showtime (exact same as resolve_showtimes)
+                                                payment['booking']['showtime']['movie'] = {
+                                                    'id': movie_data.get('id'),
+                                                    'title': movie_data.get('title'),
+                                                    'genre': movie_data.get('genre'),
+                                                    'duration': movie_data.get('duration'),
+                                                    'description': movie_data.get('description'),
+                                                    'releaseDate': movie_data.get('releaseDate'),
+                                                    'posterUrl': movie_data.get('posterUrl'),
+                                                    'rating': movie_data.get('rating')
+                                                }
+                                            else:
+                                                print(f"No movie data found for movie ID {movie_id_value}")
+                                        else:
+                                            print(f"Movie service failed for movie ID {movie_id_value}: {movie_result}")
+                                            # Add placeholder movie if service fails
+                                            payment['booking']['showtime']['movie'] = {
+                                                'id': movie_id_value,
+                                                'title': 'Unknown Movie',
+                                                'genre': 'Unknown',
+                                                'duration': 0,
+                                                'description': 'Movie details unavailable',
+                                                'releaseDate': '2024-01-01',
+                                                'posterUrl': None,
+                                                'rating': 0.0
+                                            }
+                                    else:
+                                        print(f"No movieId found in showtime data: {showtime_data}")
+                                    
+                                    # Get seat details (tickets for this booking) - CRITICAL FIX HERE!
+                                    print(f"Fetching tickets for booking ID: {booking_id}")  # Debug log
+                                    
+                                    tickets_query = {
+                                        'query': f'''
+                                        {{
+                                            tickets(bookingId: {booking_id}) {{
+                                                id
+                                                bookingId
+                                                seatNumber
+                                            }}
+                                        }}
+                                        '''
+                                    }
+                                    
+                                    tickets_result = make_service_request(SERVICE_URLS['booking'], tickets_query, 'booking')
+                                    print(f"Tickets service response: {tickets_result}")  # Debug log
+                                    
+                                    if tickets_result and not tickets_result.get('errors'):
+                                        tickets_data = tickets_result.get('data', {}).get('tickets', [])
+                                        print(f"Raw tickets data from service: {tickets_data}")  # Debug log
+                                        
+                                        # CRITICAL FIX: Create proper ticket objects instead of dict transformation
+                                        from types import SimpleNamespace
+                                        
+                                        transformed_tickets = []
+                                        for ticket in tickets_data:
+                                            print(f"Processing ticket: {ticket}")  # Debug log
+                                            
+                                            # Handle both possible field name formats from the booking service
+                                            ticket_id = ticket.get('id')
+                                            booking_id_field = ticket.get('bookingId') or ticket.get('booking_id')
+                                            seat_number_field = ticket.get('seatNumber') or ticket.get('seat_number')
+                                            
+                                            print(f"Ticket fields - id: {ticket_id}, bookingId: {booking_id_field}, seatNumber: {seat_number_field}")  # Debug log
+                                            
+                                            # Create an object-like structure instead of dict
+                                            ticket_obj = SimpleNamespace()
+                                            ticket_obj.id = ticket_id
+                                            ticket_obj.bookingId = booking_id_field
+                                            ticket_obj.seatNumber = seat_number_field
+                                            
+                                            # Also set snake_case variants for field resolvers
+                                            ticket_obj.booking_id = booking_id_field
+                                            ticket_obj.seat_number = seat_number_field
+                                            
+                                            transformed_tickets.append(ticket_obj)
+                                            print(f"Created ticket object: id={ticket_obj.id}, bookingId={ticket_obj.bookingId}, seatNumber={ticket_obj.seatNumber}")  # Debug log
+                                        
+                                        payment['booking']['tickets'] = transformed_tickets
+                                        print(f"Final transformed tickets count: {len(transformed_tickets)}")  # Debug log
+                                    else:
+                                        print(f"Tickets service failed for booking {booking_id}: {tickets_result}")
+                                        payment['booking']['tickets'] = []
+                                else:
+                                    print(f"No showtime data found for showtime ID {showtime_id}")
+                                    payment['booking']['showtime'] = None
+                                    payment['booking']['tickets'] = []
+                            else:
+                                print(f"Showtime service failed for showtime ID {showtime_id}: {showtime_result}")
+                                payment['booking']['showtime'] = None
+                                payment['booking']['tickets'] = []
+                        else:
+                            print(f"No showtimeId found in booking data: {booking_data}")
+                            payment['booking']['showtime'] = None
+                            payment['booking']['tickets'] = []
+                    else:
+                        print(f"No booking data found for booking ID {booking_id}")
+                        payment['booking'] = None
+                else:
+                    print(f"Booking service failed or returned errors for booking ID {booking_id}: {booking_result}")
+                    payment['booking'] = None
+            else:
+                print(f"No bookingId found in payment: {payment}")
+                payment['booking'] = None
+        
+        print(f"Final payments data: {payments}")  # Debug log
         return payments
 
     @require_admin
     def resolve_all_bookings(self, info, current_user):
-        """Query disesuaikan dengan booking service schema (camelCase)"""
-        query = '{ bookings { id userId movieId cinemaId showtime seats totalPrice status bookingDate } }'
+        """Get all bookings - admin only with updated booking structure"""
+        query = '''
+        { 
+            bookings { 
+                id 
+                userId 
+                showtimeId 
+                status 
+                totalPrice 
+                bookingDate 
+            } 
+        }
+        '''
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['booking'], query_data, 'booking')
         
         response = handle_service_response(result, 'booking', 'bookings')
         if not response['success']:
             raise Exception(response['error'])
-        return response['data']
-
+        
+        # Enrich bookings with ticket details (same pattern as payment queries)
+        bookings = response['data'] or []
+        
+        for booking in bookings:
+            booking_id = booking.get('id')
+            print(f"[ADMIN] Processing booking {booking_id}")  # Debug log
+            
+            if booking_id:
+                # Get tickets for this booking (same pattern as payment queries)
+                tickets_query = {
+                    'query': f'''
+                    {{
+                        tickets(bookingId: {booking_id}) {{
+                            id
+                            bookingId
+                            seatNumber
+                        }}
+                    }}
+                    '''
+                }
+                
+                tickets_result = make_service_request(SERVICE_URLS['booking'], tickets_query, 'booking')
+                print(f"[ADMIN] Tickets service response for booking {booking_id}: {tickets_result}")  # Debug log
+                
+                if tickets_result and not tickets_result.get('errors'):
+                    tickets_data = tickets_result.get('data', {}).get('tickets', [])
+                    print(f"[ADMIN] Raw tickets data for booking {booking_id}: {tickets_data}")  # Debug log
+                    
+                    # Use same ticket transformation as payment queries
+                    from types import SimpleNamespace
+                    
+                    transformed_tickets = []
+                    for ticket in tickets_data:
+                        print(f"[ADMIN] Processing ticket: {ticket}")  # Debug log
+                        
+                        # Handle both possible field name formats from the booking service
+                        ticket_id = ticket.get('id')
+                        booking_id_field = ticket.get('bookingId') or ticket.get('booking_id')
+                        seat_number_field = ticket.get('seatNumber') or ticket.get('seat_number')
+                        
+                        print(f"[ADMIN] Ticket fields - id: {ticket_id}, bookingId: {booking_id_field}, seatNumber: {seat_number_field}")  # Debug log
+                        
+                        # Create an object-like structure instead of dict (same as payment queries)
+                        ticket_obj = SimpleNamespace()
+                        ticket_obj.id = ticket_id
+                        ticket_obj.bookingId = booking_id_field
+                        ticket_obj.seatNumber = seat_number_field
+                        
+                        # Also set snake_case variants for field resolvers
+                        ticket_obj.booking_id = booking_id_field
+                        ticket_obj.seat_number = seat_number_field
+                        
+                        transformed_tickets.append(ticket_obj)
+                        print(f"[ADMIN] Created ticket object: id={ticket_obj.id}, bookingId={ticket_obj.bookingId}, seatNumber={ticket_obj.seatNumber}")  # Debug log
+                    
+                    # Set tickets directly on booking object
+                    booking['tickets'] = transformed_tickets
+                    print(f"[ADMIN] Final transformed tickets count for booking {booking_id}: {len(transformed_tickets)}")  # Debug log
+                else:
+                    print(f"[ADMIN] Tickets service failed for booking {booking_id}: {tickets_result}")
+                    booking['tickets'] = []
+            else:
+                print(f"[ADMIN] No booking ID found for booking: {booking}")
+                booking['tickets'] = []
+        
+        # Transform camelCase response to snake_case for gateway BookingType
+        if bookings:
+            transformed_bookings = []
+            for booking in bookings:
+                transformed_booking = {
+                    'id': booking.get('id'),
+                    'user_id': booking.get('userId'),  # Transform camelCase to snake_case
+                    'showtime_id': booking.get('showtimeId'),  # Transform camelCase to snake_case
+                    'status': booking.get('status'),
+                    'total_price': booking.get('totalPrice'),  # Transform camelCase to snake_case
+                    'booking_date': booking.get('bookingDate'),  # Transform camelCase to snake_case
+                    'tickets': booking.get('tickets')  # Keep the enriched tickets
+                }
+                transformed_bookings.append(transformed_booking)
+            return transformed_bookings
+        
+        return bookings
+    
     @require_admin
     def resolve_all_payments(self, info, current_user):
-        query = '{ payments { id userId bookingId amount paymentMethod paymentProofImage createdAt updatedAt } }'
+        query = '{ payments { id userId bookingId amount paymentMethod paymentProofImage status createdAt updatedAt canBeDeleted } }'
         query_data = {'query': query}
         result = make_service_request(SERVICE_URLS['payment'], query_data, 'payment')
         
@@ -392,11 +991,276 @@ class Query(ObjectType):
         if not response['success']:
             raise Exception(response['error'])
         
-        # Add virtual status to each payment
-        payments = response['data']
-        for payment in payments:
-            payment['status'] = 'PAID'  # ← Changed to uppercase - All payments are considered 'PAID'
+        # Enrich payments with booking, showtime, seat, and movie details
+        payments = response['data'] or []
         
+        for payment in payments:
+            # Handle missing fields with defaults but keep actual values if they exist
+            if payment.get('paymentMethod') is None:
+                payment['paymentMethod'] = 'CREDIT_CARD'
+            if payment.get('createdAt') is None:
+                payment['createdAt'] = '2024-01-01T00:00:00Z'
+            if payment.get('updatedAt') is None:
+                payment['updatedAt'] = '2024-01-01T00:00:00Z'
+            if payment.get('canBeDeleted') is None:
+                payment['canBeDeleted'] = True
+            if payment.get('status') is None:
+                payment['status'] = 'PAID'  # Default for admin view
+            
+            # Get booking details - ensure we have bookingId
+            booking_id = payment.get('bookingId')
+            print(f"[ADMIN] Processing payment {payment.get('id')} with bookingId: {booking_id}")  # Debug log
+            
+            if booking_id:
+                booking_query = {
+                    'query': f'''
+                    {{
+                        booking(id: {booking_id}) {{
+                            id
+                            userId
+                            showtimeId
+                            status
+                            totalPrice
+                            bookingDate
+                        }}
+                    }}
+                    '''
+                }
+                
+                print(f"[ADMIN] Querying booking service with: {booking_query}")  # Debug log
+                booking_result = make_service_request(SERVICE_URLS['booking'], booking_query, 'booking')
+                print(f"[ADMIN] Booking service response: {booking_result}")  # Debug log
+                
+                if booking_result and not booking_result.get('errors'):
+                    booking_data = booking_result.get('data', {}).get('booking')
+                    print(f"[ADMIN] Booking data extracted: {booking_data}")  # Debug log
+                    
+                    if booking_data:
+                        # Transform to camelCase for EnrichedBookingType (same as user method)
+                        payment['booking'] = {
+                            'id': booking_data.get('id'),
+                            'userId': booking_data.get('userId'),
+                            'showtimeId': booking_data.get('showtimeId'),
+                            'status': booking_data.get('status'),
+                            'totalPrice': booking_data.get('totalPrice'),
+                            'bookingDate': booking_data.get('bookingDate')
+                        }
+                        
+                        # Update payment status to match booking status
+                        payment['status'] = booking_data.get('status', payment.get('status', 'PAID'))
+                        
+                        # Get user details for admin view
+                        user_id = booking_data.get('userId')
+                        if user_id:
+                            user_query = {
+                                'query': f'''
+                                {{
+                                    user(id: {user_id}) {{
+                                        id
+                                        username
+                                        email
+                                        role
+                                    }}
+                                }}
+                                '''
+                            }
+                            
+                            user_result = make_service_request(SERVICE_URLS['user'], user_query, 'user')
+                            if user_result and not user_result.get('errors'):
+                                user_data = user_result.get('data', {}).get('user')
+                                if user_data:
+                                    payment['booking']['user'] = user_data
+                        
+                        # Get showtime details (same pattern as user method)
+                        showtime_id = booking_data.get('showtimeId')
+                        print(f"[ADMIN] Fetching showtime with ID: {showtime_id}")  # Debug log
+                        
+                        if showtime_id:
+                            showtime_query = {
+                                'query': f'''
+                                {{
+                                    showtime(id: {showtime_id}) {{
+                                        id
+                                        movieId
+                                        auditoriumId
+                                        startTime
+                                        price
+                                        auditorium {{
+                                            id
+                                            name
+                                            cinema {{
+                                                id
+                                                name
+                                                city
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                                '''
+                            }
+                            
+                            showtime_result = make_service_request(SERVICE_URLS['cinema'], showtime_query, 'cinema')
+                            print(f"[ADMIN] Showtime service response: {showtime_result}")  # Debug log
+                            
+                            if showtime_result and not showtime_result.get('errors'):
+                                showtime_data = showtime_result.get('data', {}).get('showtime')
+                                print(f"[ADMIN] Showtime data extracted: {showtime_data}")  # Debug log
+                                
+                                if showtime_data:
+                                    # Fix startTime handling (same as user method)
+                                    start_time = showtime_data.get('startTime')
+                                    if start_time:
+                                        if isinstance(start_time, str):
+                                            start_time = start_time.strip("'\"")
+                                        else:
+                                            try:
+                                                start_time = start_time.isoformat() if hasattr(start_time, 'isoformat') else str(start_time)
+                                            except:
+                                                start_time = str(start_time)
+                                    
+                                    # Keep camelCase for EnrichedShowtimeType (same as user method)
+                                    payment['booking']['showtime'] = {
+                                        'id': showtime_data.get('id'),
+                                        'movieId': showtime_data.get('movieId'),
+                                        'auditoriumId': showtime_data.get('auditoriumId'),
+                                        'startTime': start_time,
+                                        'price': showtime_data.get('price'),
+                                        'auditorium': showtime_data.get('auditorium')
+                                    }
+                                    
+                                    # Get movie details (same pattern as user method)
+                                    movie_id_value = showtime_data.get('movieId')
+                                    print(f"[ADMIN] Fetching movie with ID: {movie_id_value}")  # Debug log
+                                    
+                                    if movie_id_value:
+                                        movie_query = {
+                                            'query': f'''
+                                            {{
+                                                movie(id: {movie_id_value}) {{
+                                                    id
+                                                    title
+                                                    genre
+                                                    duration
+                                                    description
+                                                    releaseDate
+                                                    posterUrl
+                                                    rating
+                                                }}
+                                            }}
+                                            '''
+                                        }
+                                        
+                                        movie_result = make_service_request(SERVICE_URLS['movie'], movie_query, 'movie')
+                                        print(f"[ADMIN] Movie service response: {movie_result}")  # Debug log
+                                        
+                                        if movie_result and not movie_result.get('errors'):
+                                            movie_data = movie_result.get('data', {}).get('movie')
+                                            if movie_data:
+                                                payment['booking']['showtime']['movie'] = {
+                                                    'id': movie_data.get('id'),
+                                                    'title': movie_data.get('title'),
+                                                    'genre': movie_data.get('genre'),
+                                                    'duration': movie_data.get('duration'),
+                                                    'description': movie_data.get('description'),
+                                                    'releaseDate': movie_data.get('releaseDate'),
+                                                    'posterUrl': movie_data.get('posterUrl'),
+                                                    'rating': movie_data.get('rating')
+                                                }
+                                            else:
+                                                print(f"[ADMIN] No movie data found for movie ID {movie_id_value}")
+                                        else:
+                                            print(f"[ADMIN] Movie service failed for movie ID {movie_id_value}: {movie_result}")
+                                            # Add placeholder movie if service fails
+                                            payment['booking']['showtime']['movie'] = {
+                                                'id': movie_id_value,
+                                                'title': 'Unknown Movie',
+                                                'genre': 'Unknown',
+                                                'duration': 0,
+                                                'description': 'Movie details unavailable',
+                                                'releaseDate': '2024-01-01',
+                                                'posterUrl': None,
+                                                'rating': 0.0
+                                            }
+                                    else:
+                                        print(f"[ADMIN] No movieId found in showtime data: {showtime_data}")
+                                    
+                                    # Get seat details (tickets for this booking) - SAME FIX AS USER METHOD
+                                    print(f"[ADMIN] Fetching tickets for booking ID: {booking_id}")  # Debug log
+                                    
+                                    tickets_query = {
+                                        'query': f'''
+                                        {{
+                                            tickets(bookingId: {booking_id}) {{
+                                                id
+                                                bookingId
+                                                seatNumber
+                                            }}
+                                        }}
+                                        '''
+                                    }
+                                    
+                                    tickets_result = make_service_request(SERVICE_URLS['booking'], tickets_query, 'booking')
+                                    print(f"[ADMIN] Tickets service response: {tickets_result}")  # Debug log
+                                    
+                                    if tickets_result and not tickets_result.get('errors'):
+                                        tickets_data = tickets_result.get('data', {}).get('tickets', [])
+                                        print(f"[ADMIN] Raw tickets data from service: {tickets_data}")  # Debug log
+                                        
+                                        # CRITICAL FIX: Use same ticket handling as user method
+                                        from types import SimpleNamespace
+                                        
+                                        transformed_tickets = []
+                                        for ticket in tickets_data:
+                                            print(f"[ADMIN] Processing ticket: {ticket}")  # Debug log
+                                            
+                                            # Handle both possible field name formats from the booking service
+                                            ticket_id = ticket.get('id')
+                                            booking_id_field = ticket.get('bookingId') or ticket.get('booking_id')
+                                            seat_number_field = ticket.get('seatNumber') or ticket.get('seat_number')
+                                            
+                                            print(f"[ADMIN] Ticket fields - id: {ticket_id}, bookingId: {booking_id_field}, seatNumber: {seat_number_field}")  # Debug log
+                                            
+                                            # Create an object-like structure instead of dict (SAME AS USER METHOD)
+                                            ticket_obj = SimpleNamespace()
+                                            ticket_obj.id = ticket_id
+                                            ticket_obj.bookingId = booking_id_field
+                                            ticket_obj.seatNumber = seat_number_field
+                                            
+                                            # Also set snake_case variants for field resolvers
+                                            ticket_obj.booking_id = booking_id_field
+                                            ticket_obj.seat_number = seat_number_field
+                                            
+                                            transformed_tickets.append(ticket_obj)
+                                            print(f"[ADMIN] Created ticket object: id={ticket_obj.id}, bookingId={ticket_obj.bookingId}, seatNumber={ticket_obj.seatNumber}")  # Debug log
+                                        
+                                        payment['booking']['tickets'] = transformed_tickets
+                                        print(f"[ADMIN] Final transformed tickets count: {len(transformed_tickets)}")  # Debug log
+                                    else:
+                                        print(f"[ADMIN] Tickets service failed for booking {booking_id}: {tickets_result}")
+                                        payment['booking']['tickets'] = []
+                                else:
+                                    print(f"[ADMIN] No showtime data found for showtime ID {showtime_id}")
+                                    payment['booking']['showtime'] = None
+                                    payment['booking']['tickets'] = []
+                            else:
+                                print(f"[ADMIN] Showtime service failed for showtime ID {showtime_id}: {showtime_result}")
+                                payment['booking']['showtime'] = None
+                                payment['booking']['tickets'] = []
+                        else:
+                            print(f"[ADMIN] No showtimeId found in booking data: {booking_data}")
+                            payment['booking']['showtime'] = None
+                            payment['booking']['tickets'] = []
+                    else:
+                        print(f"[ADMIN] No booking data found for booking ID {booking_id}")
+                        payment['booking'] = None
+                else:
+                    print(f"[ADMIN] Booking service failed or returned errors for booking ID {booking_id}: {booking_result}")
+                    payment['booking'] = None
+            else:
+                print(f"[ADMIN] No bookingId found in payment: {payment}")
+                payment['booking'] = None
+        
+        print(f"[ADMIN] Final payments data: {payments}")  # Debug log
         return payments
 
     @require_admin
@@ -444,17 +1308,22 @@ class Query(ObjectType):
         
         return movie_data
 
-    @require_auth
-    def resolve_cinema(self, info, current_user, id):
-        """Get single cinema by ID"""
+
+    def resolve_cinema(self, info, id):
+        """Get single cinema by ID with auditoriums"""
         query_data = {
             'query': f'''
             {{
                 cinema(id: {id}) {{
                     id
                     name
-                    location
+                    city
                     capacity
+                    auditoriums {{
+                        id
+                        name
+                        seatLayout
+                    }}
                 }}
             }}
             '''
@@ -470,8 +1339,208 @@ class Query(ObjectType):
         if not cinema_data:
             raise Exception(f"Cinema with ID {id} not found")
         
+        # Transform camelCase response to snake_case for gateway types
+        if cinema_data and 'auditoriums' in cinema_data and cinema_data['auditoriums']:
+            for auditorium in cinema_data['auditoriums']:
+                # Transform camelCase to snake_case to match gateway AuditoriumType
+                if 'seatLayout' in auditorium:
+                    auditorium['seat_layout'] = auditorium.pop('seatLayout')
+        
         return cinema_data
+    
 
+    def resolve_auditoriums(self, info,cinema_id=None):
+        if cinema_id:
+            query_data = {
+                'query': f'''
+                {{
+                    auditoriumsByCinema(cinemaId: {cinema_id}) {{
+                        id
+                        cinemaId
+                        name
+                        seatLayout
+                        cinema {{
+                            id
+                            name
+                            city
+                        }}
+                    }}
+                }}
+                '''
+            }
+            data_key = 'auditoriumsByCinema'
+        else:
+            query_data = {
+                'query': '''
+                {
+                    auditoriums {
+                        id
+                        cinemaId
+                        name
+                        seatLayout
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                }
+                '''
+            }
+            data_key = 'auditoriums'
+            
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', data_key)
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        # Transform camelCase response to snake_case for gateway AuditoriumType
+        auditoriums = response['data']
+        if auditoriums:
+            for auditorium in auditoriums:
+                # Transform camelCase to snake_case to match gateway AuditoriumType
+                if 'cinemaId' in auditorium:
+                    auditorium['cinema_id'] = auditorium.pop('cinemaId')
+                if 'seatLayout' in auditorium:
+                    auditorium['seat_layout'] = auditorium.pop('seatLayout')
+        
+        return auditoriums
+    
+
+    def resolve_showtimes(self, info,movie_id=None, auditorium_id=None):
+        if movie_id:
+            query_data = {
+                'query': f'''
+                {{
+                    showtimesByMovie(movieId: "{movie_id}") {{
+                        id
+                        movieId
+                        auditoriumId
+                        startTime
+                        price
+                        auditorium {{
+                            id
+                            name
+                            cinema {{
+                                id
+                                name
+                                city
+                            }}
+                        }}
+                    }}
+                }}
+                '''
+            }
+            data_key = 'showtimesByMovie'
+        elif auditorium_id:
+            query_data = {
+                'query': f'''
+                {{
+                    showtimesByAuditorium(auditoriumId: {auditorium_id}) {{
+                        id
+                        movieId
+                        auditoriumId
+                        startTime
+                        price
+                        auditorium {{
+                            id
+                            name
+                            cinema {{
+                                id
+                                name
+                                city
+                            }}
+                        }}
+                    }}
+                }}
+                '''
+            }
+            data_key = 'showtimesByAuditorium'
+        else:
+            query_data = {'query': '{ showtimes { id movieId auditoriumId startTime price } }'}
+            data_key = 'showtimes'
+            
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', data_key)
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        # Transform camelCase response to snake_case for gateway ShowtimeType
+        showtimes = response['data']
+        if showtimes:
+            for showtime in showtimes:
+                # Transform camelCase to snake_case to match gateway ShowtimeType
+                if 'movieId' in showtime:
+                    movie_id_value = showtime['movieId']
+                    showtime['movie_id'] = showtime.pop('movieId')
+                    
+                    # Fetch movie details from movie service
+                    movie_query = {
+                        'query': f'''
+                        {{
+                            movie(id: {movie_id_value}) {{
+                                id
+                                title
+                                genre
+                                duration
+                                description
+                                releaseDate
+                                posterUrl
+                                rating
+                            }}
+                        }}
+                        '''
+                    }
+                    
+                    movie_result = make_service_request(SERVICE_URLS['movie'], movie_query, 'movie')
+                    if movie_result and not movie_result.get('errors'):
+                        movie_data = movie_result.get('data', {}).get('movie')
+                        if movie_data:
+                            # Add movie details to showtime
+                            showtime['movie'] = {
+                                'id': movie_data.get('id'),
+                                'title': movie_data.get('title'),
+                                'genre': movie_data.get('genre'),
+                                'duration': movie_data.get('duration'),
+                                'description': movie_data.get('description'),
+                                'releaseDate': movie_data.get('releaseDate'),
+                                'posterUrl': movie_data.get('posterUrl'),
+                                'rating': movie_data.get('rating')
+                            }
+                    
+                if 'auditoriumId' in showtime:
+                    showtime['auditorium_id'] = showtime.pop('auditoriumId')
+                if 'startTime' in showtime:
+                    showtime['start_time'] = showtime.pop('startTime')
+        
+        return showtimes
+    
+
+    def resolve_seat_statuses(self, info,showtime_id):
+        query_data = {
+            'query': f'''
+            {{
+                seatStatuses(showtimeId: {showtime_id}) {{
+                    id
+                    showtime_id
+                    seat_number
+                    status
+                    booking_id
+                    updated_at
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', 'seatStatuses')
+        if not response['success']:
+            raise Exception(response['error'])
+        return response['data']
+    
     @require_auth
     def resolve_user(self, info, current_user, id):
         """Get single user by ID - users can only see their own profile, admins can see any"""
@@ -687,32 +1756,164 @@ class DeleteUser(Mutation):
         )
         
 class CreateBooking(Mutation):
-    """Create booking - disesuaikan dengan booking service schema"""
+    """Create booking with new structure"""
     class Arguments:
-        movieId = Int(required=True)
-        cinemaId = Int(required=True)
-        showtime = String(required=True)
-        seats = String()
-        totalPrice = Float()
+        showtime_id = Int(required=True)  # Changed to showtime_id
+        seat_numbers = List(String, required=True)  # List of seat numbers
+        total_price = Float()
 
     Output = CreateBookingResponse
 
     @require_auth
-    def mutate(self, info, current_user, movieId, cinemaId, showtime, seats=None, totalPrice=None):
-        # Booking service expects camelCase parameters and returns camelCase fields
+    def mutate(self, info, current_user, showtime_id, seat_numbers, total_price=None):
+        # Step 1: Validate showtime exists in cinema service
+        showtime_check_query = {
+            'query': f'''
+            {{
+                showtime(id: {showtime_id}) {{
+                    id
+                    movieId
+                    auditoriumId
+                    startTime
+                    price
+                    auditorium {{
+                        id
+                        name
+                        seatLayout
+                        cinema {{
+                            id
+                            name
+                            city
+                        }}
+                    }}
+                }}
+            }}
+            '''
+        }
+        
+        showtime_result = make_service_request(SERVICE_URLS['cinema'], showtime_check_query, 'cinema')
+        if not showtime_result:
+            return CreateBookingResponse(
+                booking=None, 
+                success=False, 
+                message="Cinema service unavailable"
+            )
+        
+        if showtime_result.get('errors'):
+            return CreateBookingResponse(
+                booking=None, 
+                success=False, 
+                message=f"Showtime with ID {showtime_id} not found"
+            )
+        
+        showtime_data = showtime_result.get('data', {}).get('showtime')
+        if not showtime_data:
+            return CreateBookingResponse(
+                booking=None, 
+                success=False, 
+                message=f"Showtime with ID {showtime_id} does not exist"
+            )
+        
+        # Step 2: Validate seat numbers exist in auditorium layout
+        auditorium_data = showtime_data.get('auditorium', {})
+        seat_layout = auditorium_data.get('seatLayout', {})
+        
+        # Extract available seat numbers from auditorium layout
+        available_seats = []
+        if seat_layout:
+            # Handle both JSON string and dict formats
+            if isinstance(seat_layout, str):
+                try:
+                    import json
+                    seat_layout = json.loads(seat_layout)
+                except json.JSONDecodeError:
+                    seat_layout = {}
+            
+            if isinstance(seat_layout, dict):
+                seats_data = seat_layout.get('seats', [])
+                if isinstance(seats_data, list):
+                    for seat in seats_data:
+                        if isinstance(seat, dict) and seat.get('number'):
+                            available_seats.append(seat.get('number'))
+                        elif isinstance(seat, str):
+                            available_seats.append(seat)
+        
+        # If no seats found in layout, get from seat statuses
+        if not available_seats:
+            seat_status_query = {
+                'query': f'''
+                {{
+                    seatStatuses(showtimeId: {showtime_id}) {{
+                        seatNumber
+                        status
+                    }}
+                }}
+                '''
+            }
+            
+            seat_status_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+            if seat_status_result and not seat_status_result.get('errors'):
+                seat_statuses = seat_status_result.get('data', {}).get('seatStatuses', [])
+                available_seats = [status.get('seatNumber') for status in seat_statuses if status.get('seatNumber')]
+        
+        # Validate all requested seat numbers exist in auditorium
+        invalid_seats = [seat for seat in seat_numbers if seat not in available_seats]
+        if invalid_seats:
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message=f"Invalid seat numbers: {', '.join(invalid_seats)}. Available seats: {', '.join(available_seats)}"
+            )
+        
+        # Step 3: Check if seats are available (not already booked or reserved)
+        seat_status_query = {
+            'query': f'''
+            {{
+                seatStatuses(showtimeId: {showtime_id}) {{
+                    seatNumber
+                    status
+                    bookingId
+                }}
+            }}
+            '''
+        }
+        
+        seat_status_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+        if seat_status_result and not seat_status_result.get('errors'):
+            seat_statuses = seat_status_result.get('data', {}).get('seatStatuses', [])
+            
+            # Check if any requested seats are already booked or reserved
+            unavailable_seats = []
+            for seat_status in seat_statuses:
+                seat_number = seat_status.get('seatNumber')
+                status = seat_status.get('status')
+                
+                if seat_number in seat_numbers and status in ['BOOKED', 'RESERVED']:
+                    unavailable_seats.append(f"{seat_number} ({status})")
+            
+            if unavailable_seats:
+                return CreateBookingResponse(
+                    booking=None,
+                    success=False,
+                    message=f"Seats not available: {', '.join(unavailable_seats)}"
+                )
+        
+        # Step 4: Calculate total price if not provided
+        if total_price is None:
+            showtime_price = float(showtime_data.get('price', 0))
+            total_price = showtime_price * len(seat_numbers)
+        
+        # Step 5: Create booking
         query_data = {
             'query': '''
-            mutation($userId: Int!, $movieId: Int!, $cinemaId: Int!, $showtime: String!, $seats: String, $totalPrice: Float) {
-                createBooking(userId: $userId, movieId: $movieId, cinemaId: $cinemaId, showtime: $showtime, seats: $seats, totalPrice: $totalPrice) {
+            mutation($userId: Int!, $showtimeId: Int!, $seatNumbers: [String!]!, $totalPrice: Float) {
+                createBooking(userId: $userId, showtimeId: $showtimeId, seatNumbers: $seatNumbers, totalPrice: $totalPrice) {
                     booking {
                         id
                         userId
-                        movieId
-                        cinemaId
-                        showtime
-                        seats
-                        totalPrice
+                        showtimeId
                         status
+                        totalPrice
                         bookingDate
                     }
                     success
@@ -721,12 +1922,10 @@ class CreateBooking(Mutation):
             }
             ''',
             'variables': {
-                'userId': current_user['user_id'],     # Map to camelCase
-                'movieId': movieId,                    # Already camelCase
-                'cinemaId': cinemaId,                  # Already camelCase
-                'showtime': showtime,
-                'seats': seats,
-                'totalPrice': totalPrice               # Already camelCase
+                'userId': current_user['user_id'],
+                'showtimeId': showtime_id,
+                'seatNumbers': seat_numbers,
+                'totalPrice': total_price
             }
         }
         
@@ -737,8 +1936,7 @@ class CreateBooking(Mutation):
                 success=False, 
                 message="Booking service unavailable"
             )
-        
-        # Improved error handling
+
         if result.get('errors'):
             error_messages = []
             for error in result['errors']:
@@ -754,7 +1952,7 @@ class CreateBooking(Mutation):
                 success=False,
                 message=f"Booking errors: {'; '.join(error_messages)}"
             )
-        
+
         data = result.get('data')
         if not data:
             return CreateBookingResponse(
@@ -762,51 +1960,296 @@ class CreateBooking(Mutation):
                 success=False,
                 message="No data returned from booking service"
             )
-        
+
         booking_result = data.get('createBooking', {})
-        if not booking_result.get('success'):
+        booking_data = booking_result.get('booking')
+        
+        # Transform camelCase response to snake_case for gateway BookingType
+        if booking_data:
+            transformed_booking = {
+                'id': booking_data.get('id'),
+                'user_id': booking_data.get('userId'),  # Transform camelCase to snake_case
+                'showtime_id': booking_data.get('showtimeId'),  # Transform camelCase to snake_case
+                'status': booking_data.get('status'),
+                'total_price': booking_data.get('totalPrice'),  # Transform camelCase to snake_case
+                'booking_date': booking_data.get('bookingDate'),  # Transform camelCase to snake_case
+                'tickets': booking_data.get('tickets')
+            }
+            
             return CreateBookingResponse(
-                booking=None,
-                success=False,
-                message=booking_result.get('message', 'Failed to create booking')
+                booking=transformed_booking,
+                success=booking_result.get('success', False),
+                message=booking_result.get('message', 'Booking created successfully')
             )
         
-        # No field transformation needed since both use camelCase
         return CreateBookingResponse(
-            booking=booking_result.get('booking'),
-            success=True,
-            message=booking_result.get('message', 'Booking created successfully')
+            booking=None,
+            success=booking_result.get('success', False),
+            message=booking_result.get('message', 'Booking operation completed')
         )
 
 class UpdateBooking(Mutation):
-    """Update booking - disesuaikan dengan booking service schema"""
+    """Update booking - updated to match new booking structure"""
     class Arguments:
         id = Int(required=True)
-        movieId = Int()
-        cinemaId = Int()
-        showtime = String()
-        seats = String()
-        totalPrice = Float()
+        showtime_id = Int()  # Changed from movieId/cinemaId to showtime_id
+        seat_numbers = List(String)  # Changed from seats string to seat_numbers list
+        total_price = Float()  # Changed from totalPrice to total_price
         status = String()
 
     Output = UpdateBookingResponse
 
     @require_auth
-    def mutate(self, info, current_user, id, movieId=None, cinemaId=None, showtime=None, seats=None, totalPrice=None, status=None):
-        # Booking service expects camelCase parameters
+    def mutate(self, info, current_user, id, showtime_id=None, seat_numbers=None, total_price=None, status=None):
+        # Step 1: Get current booking details first
+        current_booking_query = {
+            'query': f'''
+            {{
+                booking(id: {id}) {{
+                    id
+                    userId
+                    showtimeId
+                    status
+                    totalPrice
+                }}
+            }}
+            '''
+        }
+        
+        current_booking_result = make_service_request(SERVICE_URLS['booking'], current_booking_query, 'booking')
+        if not current_booking_result:
+            return UpdateBookingResponse(
+                booking=None, 
+                success=False, 
+                message="Booking service unavailable"
+            )
+        
+        if current_booking_result.get('errors'):
+            return UpdateBookingResponse(
+                booking=None, 
+                success=False, 
+                message=f"Booking with ID {id} not found"
+            )
+        
+        current_booking_data = current_booking_result.get('data', {}).get('booking')
+        if not current_booking_data:
+            return UpdateBookingResponse(
+                booking=None, 
+                success=False, 
+                message=f"Booking with ID {id} not found"
+            )
+        
+        # Check ownership (users can only update their own bookings)
+        if current_user['role'] != 'ADMIN' and current_booking_data['userId'] != current_user['user_id']:
+            return UpdateBookingResponse(
+                booking=None, 
+                success=False, 
+                message="You can only update your own bookings"
+            )
+
+        # Step 2: Get current seats for this booking (to release them later if seat_numbers is updated)
+        current_showtime_id = showtime_id or current_booking_data['showtimeId']
+        old_seats_to_release = []
+        
+        if seat_numbers:  # Only get old seats if we're updating seat numbers
+            current_seat_query = {
+                'query': f'''
+                {{
+                    seatStatuses(showtimeId: {current_booking_data['showtimeId']}) {{
+                        seatNumber
+                        status
+                        bookingId
+                    }}
+                }}
+                '''
+            }
+            
+            current_seat_result = make_service_request(SERVICE_URLS['cinema'], current_seat_query, 'cinema')
+            if current_seat_result and not current_seat_result.get('errors'):
+                current_seat_statuses = current_seat_result.get('data', {}).get('seatStatuses', [])
+                
+                # Find seats currently assigned to this booking
+                for seat_status in current_seat_statuses:
+                    if seat_status.get('bookingId') == id and seat_status.get('status') in ['RESERVED', 'BOOKED']:
+                        old_seats_to_release.append(seat_status.get('seatNumber'))
+
+        # Step 3: Validate showtime exists if showtime_id is being updated
+        if showtime_id:
+            showtime_check_query = {
+                'query': f'''
+                {{
+                    showtime(id: {showtime_id}) {{
+                        id
+                        movieId
+                        auditoriumId
+                        startTime
+                        price
+                        auditorium {{
+                            id
+                            name
+                            seatLayout
+                            cinema {{
+                                id
+                                name
+                                city
+                            }}
+                        }}
+                    }}
+                }}
+                '''
+            }
+            
+            showtime_result = make_service_request(SERVICE_URLS['cinema'], showtime_check_query, 'cinema')
+            if not showtime_result:
+                return UpdateBookingResponse(
+                    booking=None, 
+                    success=False, 
+                    message="Cinema service unavailable"
+                )
+            
+            if showtime_result.get('errors'):
+                return UpdateBookingResponse(
+                    booking=None, 
+                    success=False, 
+                    message=f"Showtime with ID {showtime_id} not found"
+                )
+            
+            showtime_data = showtime_result.get('data', {}).get('showtime')
+            if not showtime_data:
+                return UpdateBookingResponse(
+                    booking=None, 
+                    success=False, 
+                    message=f"Showtime with ID {showtime_id} does not exist"
+                )
+
+        # Step 4: Validate seat numbers if being updated
+        if seat_numbers and showtime_id:
+            # Get auditorium layout for validation
+            auditorium_data = showtime_data.get('auditorium', {})
+            seat_layout = auditorium_data.get('seatLayout', {})
+            
+            # Extract available seat numbers from auditorium layout
+            available_seats = []
+            if seat_layout:
+                # Handle both JSON string and dict formats
+                if isinstance(seat_layout, str):
+                    try:
+                        import json
+                        seat_layout = json.loads(seat_layout)
+                    except json.JSONDecodeError:
+                        seat_layout = {}
+                
+                if isinstance(seat_layout, dict):
+                    seats_data = seat_layout.get('seats', [])
+                    if isinstance(seats_data, list):
+                        for seat in seats_data:
+                            if isinstance(seat, dict) and seat.get('number'):
+                                available_seats.append(seat.get('number'))
+                            elif isinstance(seat, str):
+                                available_seats.append(seat)
+            
+            # If no seats found in layout, get from seat statuses
+            if not available_seats:
+                seat_status_query = {
+                    'query': f'''
+                    {{
+                        seatStatuses(showtimeId: {showtime_id}) {{
+                            seatNumber
+                            status
+                        }}
+                    }}
+                    '''
+                }
+                
+                seat_status_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+                if seat_status_result and not seat_status_result.get('errors'):
+                    seat_statuses = seat_status_result.get('data', {}).get('seatStatuses', [])
+                    available_seats = [status.get('seatNumber') for status in seat_statuses if status.get('seatNumber')]
+            
+            # Validate all requested seat numbers exist in auditorium
+            invalid_seats = [seat for seat in seat_numbers if seat not in available_seats]
+            if invalid_seats:
+                return UpdateBookingResponse(
+                    booking=None,
+                    success=False,
+                    message=f"Invalid seat numbers: {', '.join(invalid_seats)}. Available seats: {', '.join(available_seats)}"
+                )
+
+            # Check if new seats are available (excluding current booking's seats)
+            seat_status_query = {
+                'query': f'''
+                {{
+                    seatStatuses(showtimeId: {current_showtime_id}) {{
+                        seatNumber
+                        status
+                        bookingId
+                    }}
+                }}
+                '''
+            }
+            
+            seat_status_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+            if seat_status_result and not seat_status_result.get('errors'):
+                seat_statuses = seat_status_result.get('data', {}).get('seatStatuses', [])
+                
+                # Check if any requested seats are already booked/reserved by other bookings
+                unavailable_seats = []
+                for seat_status in seat_statuses:
+                    seat_number = seat_status.get('seatNumber')
+                    status_value = seat_status.get('status')
+                    booking_id = seat_status.get('bookingId')
+                    
+                    # Seat is unavailable if it's booked/reserved by another booking
+                    if (seat_number in seat_numbers and 
+                        status_value in ['BOOKED', 'RESERVED'] and 
+                        booking_id != id):
+                        unavailable_seats.append(f"{seat_number} ({status_value})")
+                
+                if unavailable_seats:
+                    return UpdateBookingResponse(
+                        booking=None,
+                        success=False,
+                        message=f"Seats not available: {', '.join(unavailable_seats)}"
+                    )
+
+        # Step 5: Calculate total price if not provided but showtime_id is being updated
+        if showtime_id and seat_numbers and total_price is None:
+            showtime_price = float(showtime_data.get('price', 0))
+            total_price = showtime_price * len(seat_numbers)
+
+        # Step 6: Release old seats before updating (if seat_numbers is being changed)
+        if seat_numbers and old_seats_to_release:
+            for old_seat in old_seats_to_release:
+                release_seat_query = {
+                    'query': '''
+                    mutation($showtimeId: Int!, $seatNumber: String!, $status: String!) {
+                        updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status) {
+                            success
+                            message
+                        }
+                    }
+                    ''',
+                    'variables': {
+                        'showtimeId': current_booking_data['showtimeId'],
+                        'seatNumber': old_seat,
+                        'status': 'AVAILABLE'
+                    }
+                }
+                
+                # Release the old seat (don't fail if this fails)
+                make_service_request(SERVICE_URLS['cinema'], release_seat_query, 'cinema')
+
+        # Step 7: Update booking using new structure
         query_data = {
             'query': '''
-            mutation($id: Int!, $movieId: Int, $cinemaId: Int, $showtime: String, $seats: String, $totalPrice: Float, $status: String) {
-                updateBooking(id: $id, movieId: $movieId, cinemaId: $cinemaId, showtime: $showtime, seats: $seats, totalPrice: $totalPrice, status: $status) {
+            mutation($id: Int!, $showtimeId: Int, $seatNumbers: [String!], $totalPrice: Float, $status: String) {
+                updateBooking(id: $id, showtimeId: $showtimeId, seatNumbers: $seatNumbers, totalPrice: $totalPrice, status: $status) {
                     booking {
                         id
                         userId
-                        movieId
-                        cinemaId
-                        showtime
-                        seats
-                        totalPrice
+                        showtimeId
                         status
+                        totalPrice
                         bookingDate
                     }
                     success
@@ -816,11 +2259,9 @@ class UpdateBooking(Mutation):
             ''',
             'variables': {
                 'id': id,
-                'movieId': movieId,        # Use camelCase
-                'cinemaId': cinemaId,      # Use camelCase
-                'showtime': showtime,
-                'seats': seats,
-                'totalPrice': totalPrice,  # Use camelCase
+                'showtimeId': showtime_id,  # Use camelCase for booking service
+                'seatNumbers': seat_numbers,  # Use camelCase for booking service
+                'totalPrice': total_price,  # Use camelCase for booking service
                 'status': status
             }
         }
@@ -839,8 +2280,28 @@ class UpdateBooking(Mutation):
             return UpdateBookingResponse(booking=None, success=False, message=f"Error: {'; '.join(error_messages)}")
         
         booking_result = result.get('data', {}).get('updateBooking', {})
+        booking_data = booking_result.get('booking')
+        
+        # Transform camelCase response to snake_case for gateway BookingType
+        if booking_data:
+            transformed_booking = {
+                'id': booking_data.get('id'),
+                'user_id': booking_data.get('userId'),  # Transform camelCase to snake_case
+                'showtime_id': booking_data.get('showtimeId'),  # Transform camelCase to snake_case
+                'status': booking_data.get('status'),
+                'total_price': booking_data.get('totalPrice'),  # Transform camelCase to snake_case
+                'booking_date': booking_data.get('bookingDate'),  # Transform camelCase to snake_case
+                'tickets': booking_data.get('tickets')
+            }
+            
+            return UpdateBookingResponse(
+                booking=transformed_booking,
+                success=booking_result.get('success', False),
+                message=booking_result.get('message', 'Booking updated successfully')
+            )
+        
         return UpdateBookingResponse(
-            booking=booking_result.get('booking'),
+            booking=None,
             success=booking_result.get('success', False),
             message=booking_result.get('message', 'Booking update completed')
         )
@@ -853,6 +2314,65 @@ class DeleteBooking(Mutation):
 
     @require_auth
     def mutate(self, info, current_user, id):
+        # Step 1: First check if booking exists and get booking details for validation
+        booking_check_query = {
+            'query': f'''
+            {{
+                booking(id: {id}) {{
+                    id
+                    userId
+                    showtimeId
+                    status
+                    totalPrice
+                }}
+            }}
+            '''
+        }
+        
+        booking_result = make_service_request(SERVICE_URLS['booking'], booking_check_query, 'booking')
+        if not booking_result:
+            return DeleteResponse(success=False, message="Booking service unavailable")
+        
+        if booking_result.get('errors'):
+            return DeleteResponse(success=False, message=f"Booking with ID {id} not found")
+        
+        booking_data = booking_result.get('data', {}).get('booking')
+        if not booking_data:
+            return DeleteResponse(success=False, message=f"Booking with ID {id} not found")
+        
+        # Step 2: Check ownership (users can only cancel their own bookings, admins can cancel any)
+        if current_user['role'] != 'ADMIN' and booking_data['userId'] != current_user['user_id']:
+            return DeleteResponse(success=False, message="You can only cancel your own bookings")
+        
+        # Step 3: Check if booking can be cancelled (only PENDING or PAID bookings can be cancelled)
+        if booking_data['status'] == 'CANCELLED':
+            return DeleteResponse(success=False, message="Booking is already cancelled")
+        
+        # Step 4: Get seat numbers that need to be released back to AVAILABLE
+        seat_status_query = {
+            'query': f'''
+            {{
+                seatStatuses(showtimeId: {booking_data['showtimeId']}) {{
+                    seatNumber
+                    status
+                    bookingId
+                }}
+            }}
+            '''
+        }
+        
+        seat_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+        seats_to_release = []
+        
+        if seat_result and not seat_result.get('errors'):
+            seat_statuses = seat_result.get('data', {}).get('seatStatuses', [])
+            
+            # Find seats that belong to this booking
+            for seat_status in seat_statuses:
+                if seat_status.get('bookingId') == id and seat_status.get('status') in ['RESERVED', 'BOOKED']:
+                    seats_to_release.append(seat_status.get('seatNumber'))
+        
+        # Step 5: Delete the booking (this will also delete associated tickets)
         query_data = {
             'query': '''
             mutation($id: Int!) {
@@ -874,14 +2394,54 @@ class DeleteBooking(Mutation):
             return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
         
         delete_result = result.get('data', {}).get('deleteBooking', {})
-        return DeleteResponse(
-            success=delete_result.get('success', False),
-            message=delete_result.get('message', 'Booking deletion completed')
-        )
+        
+        # Step 6: If booking deletion was successful, release the seats back to AVAILABLE
+        if delete_result.get('success', False):
+            failed_seat_releases = []
+            
+            for seat_number in seats_to_release:
+                seat_update_query = {
+                    'query': '''
+                    mutation($showtimeId: Int!, $seatNumber: String!, $status: String!) {
+                        updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status) {
+                            success
+                            message
+                        }
+                    }
+                    ''',
+                    'variables': {
+                        'showtimeId': booking_data['showtimeId'],
+                        'seatNumber': seat_number,
+                        'status': 'AVAILABLE'
+                    }
+                }
+                
+                seat_update_result = make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
+                
+                # Log failed seat releases but don't fail the whole operation
+                if not seat_update_result or seat_update_result.get('errors'):
+                    failed_seat_releases.append(seat_number)
+            
+            # Prepare success message
+            success_message = delete_result.get('message', 'Booking cancelled successfully')
+            if seats_to_release:
+                success_message += f" and {len(seats_to_release)} seats released"
+                if failed_seat_releases:
+                    success_message += f" (failed to release seats: {', '.join(failed_seat_releases)})"
+            
+            return DeleteResponse(
+                success=True,
+                message=success_message
+            )
+        else:
+            return DeleteResponse(
+                success=False,
+                message=delete_result.get('message', 'Failed to cancel booking')
+            )
 
 class CreatePayment(Mutation):
     class Arguments:
-        amount = Float(required=True)
+        # Removed amount from required arguments - will be calculated automatically
         bookingId = Int(required=True)
         paymentMethod = String()
         paymentProofImage = String()
@@ -889,37 +2449,131 @@ class CreatePayment(Mutation):
     Output = CreatePaymentResponse
 
     @require_auth
-    def mutate(self, info, current_user, amount, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None):
-        # Step 1: Check booking exists and is in 'PENDING' status
+    def mutate(self, info, current_user, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None):
+        # Step 1: Validate booking exists and get booking details
         booking_check_query = {
             'query': f'''
             {{
-                userBookings(userId: {current_user['user_id']}) {{
+                booking(id: {bookingId}) {{
                     id
                     status
+                    showtimeId
                     totalPrice
+                    userId
                 }}
             }}
-            ''',
+            '''
         }
         
         booking_result = make_service_request(SERVICE_URLS['booking'], booking_check_query, 'booking')
         if not booking_result:
-            raise Exception("Booking service unavailable")
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Booking service unavailable"
+            )
+
+        booking_data = booking_result.get('data', {}).get('booking')
+        if not booking_data:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message=f"Booking with ID {bookingId} not found"
+            )
+
+        if booking_data['userId'] != current_user['user_id']:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="You can only pay for your own bookings"
+            )
+
+        if booking_data['status'] != 'PENDING':
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message=f"Booking is already {booking_data['status']}"
+            )
+
+        # Step 2: Get showtime details to calculate amount automatically
+        showtime_query = {
+            'query': f'''
+            {{
+                showtime(id: {booking_data['showtimeId']}) {{
+                    id
+                    movieId
+                    auditoriumId
+                    startTime
+                    price
+                }}
+            }}
+            '''
+        }
         
-        user_bookings = booking_result.get('data', {}).get('userBookings', [])
-        target_booking = next((b for b in user_bookings if b['id'] == bookingId), None)
+        showtime_result = make_service_request(SERVICE_URLS['cinema'], showtime_query, 'cinema')
+        if not showtime_result or showtime_result.get('errors'):
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Failed to get showtime details for amount calculation"
+            )
         
-        if not target_booking:
-            raise Exception(f"Booking {bookingId} not found or not owned by user")
+        showtime_data = showtime_result.get('data', {}).get('showtime')
+        if not showtime_data:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Showtime not found for amount calculation"
+            )
+
+        # Step 3: Get reserved seats count to calculate total amount
+        seat_status_query = {
+            'query': f'''
+            {{
+                seatStatuses(showtimeId: {booking_data['showtimeId']}) {{
+                    seatNumber
+                    status
+                    bookingId
+                }}
+            }}
+            '''
+        }
         
-        if target_booking['status'] != 'PENDING':
-            raise Exception(f"Booking {bookingId} is already {target_booking['status']}. Only PENDING bookings can be paid.")
+        seat_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
+        if not seat_result or seat_result.get('errors'):
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Failed to get seat information for amount calculation"
+            )
+
+        reserved_seats = []
+        seat_statuses = seat_result.get('data', {}).get('seatStatuses', [])
         
-        # Step 2: Create payment (without status attribute)
+        # Find seats that are reserved for this booking
+        for seat_status in seat_statuses:
+            if (seat_status.get('status') == 'RESERVED' and 
+                seat_status.get('bookingId') == bookingId):
+                reserved_seats.append(seat_status['seatNumber'])
+
+        if not reserved_seats:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="No reserved seats found for this booking"
+            )
+
+        # Step 4: Calculate amount automatically (seat count × showtime price)
+        showtime_price = float(showtime_data.get('price', 0))
+        seat_count = len(reserved_seats)
+        calculated_amount = showtime_price * seat_count
+        
+        print(f"Payment calculation: {seat_count} seats × {showtime_price} = {calculated_amount}")  # Debug log
+
+        # Step 5: Create payment with calculated amount (status starts as 'pending')
         payment_query = {
             'query': '''
-            mutation($amount: Float!, $userId: Int!, $bookingId: Int!, $paymentMethod: String, $paymentProofImage: String) {
+            mutation($amount: Float!, $userId: Int!, $bookingId: Int!, $paymentMethod: String!, $paymentProofImage: String) {
                 createPayment(amount: $amount, userId: $userId, bookingId: $bookingId, paymentMethod: $paymentMethod, paymentProofImage: $paymentProofImage) {
                     payment {
                         id
@@ -927,6 +2581,7 @@ class CreatePayment(Mutation):
                         bookingId
                         amount
                         paymentMethod
+                        status
                         paymentProofImage
                         createdAt
                         updatedAt
@@ -937,7 +2592,7 @@ class CreatePayment(Mutation):
             }
             ''',
             'variables': {
-                'amount': amount,
+                'amount': calculated_amount,
                 'userId': current_user['user_id'],
                 'bookingId': bookingId,
                 'paymentMethod': paymentMethod,
@@ -947,7 +2602,11 @@ class CreatePayment(Mutation):
         
         payment_result = make_service_request(SERVICE_URLS['payment'], payment_query, 'payment')
         if not payment_result:
-            raise Exception("Payment service unavailable")
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Payment service unavailable"
+            )
         
         if payment_result.get('errors'):
             error_messages = []
@@ -956,13 +2615,58 @@ class CreatePayment(Mutation):
                     error_messages.append(error.get('message', str(error)))
                 else:
                     error_messages.append(str(error))
-            raise Exception(f"Payment creation failed: {'; '.join(error_messages)}")
-        
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message=f"Payment errors: {'; '.join(error_messages)}"
+            )
+
         payment_data = payment_result.get('data', {}).get('createPayment', {})
         if not payment_data.get('success'):
-            raise Exception(payment_data.get('message', 'Failed to create payment'))
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message=payment_data.get('message', 'Failed to create payment')
+            )
+
+        payment_service_data = payment_data.get('payment')
+        payment_id = payment_service_data.get('id') if payment_service_data else None
+
+        if not payment_id:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Payment created but ID not returned"
+            )
+
+        # Step 6: AUTOMATICALLY update payment status to 'success' (system-driven)
+        print(f"Automatically updating payment {payment_id} status to 'success'")  # Debug log
         
-        # Step 3: Automatically update booking status to 'PAID'
+        status_update_query = {
+            'query': '''
+            mutation($id: Int!, $status: String!) {
+                updatePaymentStatus(id: $id, status: $status) {
+                    payment {
+                        id
+                        status
+                    }
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': payment_id,
+                'status': 'success'
+            }
+        }
+        
+        status_update_result = make_service_request(SERVICE_URLS['payment'], status_update_query, 'payment')
+        print(f"Payment status update result: {status_update_result}")  # Debug log
+
+        # Step 7: AUTOMATICALLY update booking status to 'PAID' (system-driven)
+        print(f"Automatically updating booking {bookingId} status to 'PAID'")  # Debug log
+        
         booking_update_query = {
             'query': '''
             mutation($id: Int!, $status: String!) {
@@ -978,82 +2682,87 @@ class CreatePayment(Mutation):
             ''',
             'variables': {
                 'id': bookingId,
-                'status': 'PAID'  # ← Changed to uppercase
+                'status': 'PAID'
             }
         }
         
         booking_update_result = make_service_request(SERVICE_URLS['booking'], booking_update_query, 'booking')
-        if not booking_update_result or booking_update_result.get('errors'):
-            # Payment created but booking status update failed - this is critical
-            print(f"CRITICAL: Payment {payment_data.get('payment', {}).get('id')} created but booking {bookingId} status update failed")
+        print(f"Booking status update result: {booking_update_result}")  # Debug log
+        
+        # Step 8: Create tickets for reserved seats automatically
+        if reserved_seats:
+            ticket_query = {
+                'query': '''
+                mutation($bookingId: Int!, $seatNumbers: [String!]!) {
+                    createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
+                        tickets {
+                            id
+                            bookingId
+                            seatNumber
+                        }
+                        success
+                        message
+                    }
+                }
+                ''',
+                'variables': {
+                    'bookingId': bookingId,
+                    'seatNumbers': reserved_seats
+                }
+            }
             
-        # Step 4: Add virtual status field to payment response
-        user_payment_count_query = {
-            'query': f'''
-            {{
-                userPayments(userId: {current_user['user_id']}) {{
-                    id
-                }}
-            }}
-            '''
-        }
-        payment_count_result = make_service_request(SERVICE_URLS['payment'], user_payment_count_query, 'payment')
-        if payment_count_result and payment_count_result.get('data'):
-            user_payments = payment_count_result.get('data', {}).get('userPayments', [])
-            total_payments = len(user_payments)
+            ticket_result = make_service_request(SERVICE_URLS['booking'], ticket_query, 'booking')
+            print(f"Ticket creation result: {ticket_result}")  # Debug log
             
-            print(f"User {current_user['user_id']} now has {total_payments} total payments")
-            if total_payments > 0 and total_payments % 3 == 0:
-                print(f"Generating loyalty coupon for user {current_user['user_id']} after {total_payments} payments") 
-                loyalty_coupon_query = {
+            # Update seat statuses from RESERVED to BOOKED after creating tickets
+            for seat_number in reserved_seats:
+                seat_update_query = {
                     'query': '''
-                    mutation($user_id: Int!, $booking_count: Int!) {
-                        generateLoyaltyCoupon(user_id: $user_id, booking_count: $booking_count) {
-                            coupon {
-                                id
-                                code
-                                name
-                                discount_percentage
-                            }
+                    mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
+                        updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
                             success
                             message
                         }
                     }
                     ''',
                     'variables': {
-                        'user_id': current_user['user_id'],
-                        'booking_count': total_payments
+                        'showtimeId': booking_data['showtimeId'],
+                        'seatNumber': seat_number,
+                        'status': 'BOOKED',
+                        'bookingId': bookingId
                     }
                 }
-                print(f"Sending loyalty coupon request: {loyalty_coupon_query}")  # Debug log
                 
-                coupon_result = make_service_request(SERVICE_URLS['coupon'], loyalty_coupon_query, 'coupon')
-                if coupon_result:
-                    print(f"Coupon service response: {coupon_result}")  # Debug log
-                    
-                    if coupon_result.get('errors'):
-                        print(f"Coupon generation errors: {coupon_result['errors']}")
-                    else:
-                        coupon_data = coupon_result.get('data', {}).get('generateLoyaltyCoupon', {})
-                        if coupon_data.get('success'):
-                            print(f"Loyalty coupon generated successfully for user {current_user['user_id']}: {coupon_data.get('coupon', {}).get('code')}")
-                        else:
-                            print(f"Loyalty coupon generation failed: {coupon_data.get('message')}")
-                else:
-                    print("No response from coupon service")
-                    
-        # Step 5: Add virtual status field to payment response
-        payment = payment_data.get('payment')
-        if payment:
-            # Add status based on booking status update success
-            payment['status'] = 'PAID'  # ← Changed to uppercase, since payment creation implies immediate payment
-        
-        return CreatePaymentResponse(
-            payment=payment,
-            success=True,
-            message=f"Payment created successfully and booking status updated to 'PAID'"
-        )
+                make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
 
+        # Step 9: Transform payment data properly with final status
+        if payment_service_data:
+            transformed_payment = {
+                'id': payment_service_data.get('id'),
+                'userId': payment_service_data.get('userId') or current_user['user_id'],
+                'bookingId': payment_service_data.get('bookingId') or bookingId,
+                'amount': payment_service_data.get('amount') or calculated_amount,
+                'paymentMethod': payment_service_data.get('paymentMethod') or paymentMethod,
+                'status': 'success',  # Set final status to success
+                'paymentProofImage': payment_service_data.get('paymentProofImage') or paymentProofImage,
+                'createdAt': payment_service_data.get('createdAt'),
+                'updatedAt': payment_service_data.get('updatedAt'),
+                'canBeDeleted': False  # Success payments cannot be deleted
+            }
+            
+            print(f"Final transformed payment: {transformed_payment}")
+            
+            return CreatePaymentResponse(
+                payment=transformed_payment,
+                success=True,
+                message=f"Payment successful! Amount: {seat_count} seats × ${showtime_price:,.0f} = ${calculated_amount:,.0f}. Payment status: SUCCESS, Booking status: PAID. Tickets created automatically."
+            )
+        else:
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Payment processing completed but data not available"
+            )
 
 class DeletePayment(Mutation):
     class Arguments:
@@ -1146,17 +2855,19 @@ class CreateMovie(Mutation):
         duration = Int(required=True)
         description = String()
         releaseDate = String()
+        posterUrl = String()    # Added poster URL
+        rating = Float()        # Added rating
 
     Output = CreateMovieResponse
 
     @require_admin
-    def mutate(self, info, current_user, title, genre, duration, description=None, releaseDate=None):
+    def mutate(self, info, current_user, title, genre, duration, description=None, releaseDate=None, posterUrl=None, rating=None):
         query_data = {
             'query': '''
-            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $releaseDate: String) {
-                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate) {
+            mutation($title: String!, $genre: String!, $duration: Int!, $description: String, $releaseDate: String, $posterUrl: String, $rating: Float) {
+                createMovie(title: $title, genre: $genre, duration: $duration, description: $description, releaseDate: $releaseDate, posterUrl: $posterUrl, rating: $rating) {
                     movie {
-                        id title genre duration description releaseDate
+                        id title genre duration description releaseDate posterUrl rating
                     }
                     success message
                 }
@@ -1164,7 +2875,8 @@ class CreateMovie(Mutation):
             ''',
             'variables': {
                 'title': title, 'genre': genre, 'duration': duration,
-                'description': description, 'releaseDate': releaseDate
+                'description': description, 'releaseDate': releaseDate,
+                'posterUrl': posterUrl, 'rating': rating
             }
         }
         
@@ -1279,23 +2991,23 @@ class DeleteMovie(Mutation):
 class CreateCinema(Mutation):
     class Arguments:
         name = String(required=True)
-        location = String(required=True)
+        city = String(required=True)  # Changed from location to city
         capacity = Int(required=True)
 
     Output = CreateCinemaResponse
 
     @require_admin
-    def mutate(self, info, current_user, name, location, capacity):
+    def mutate(self, info, current_user, name, city, capacity):
         query_data = {
             'query': '''
-            mutation($name: String!, $location: String!, $capacity: Int!) {
-                createCinema(name: $name, location: $location, capacity: $capacity) {
-                    cinema { id name location capacity }
+            mutation($name: String!, $city: String!, $capacity: Int!) {
+                createCinema(name: $name, city: $city, capacity: $capacity) {
+                    cinema { id name city capacity }
                     success message
                 }
             }
             ''',
-            'variables': {'name': name, 'location': location, 'capacity': capacity}
+            'variables': {'name': name, 'city': city, 'capacity': capacity}
         }
         
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
@@ -1353,21 +3065,21 @@ class UpdateCinema(Mutation):
     class Arguments:
         id = Int(required=True)
         name = String()
-        location = String()
+        city = String()  # Changed from location to city
         capacity = Int()
 
     Output = UpdateCinemaResponse
 
     @require_admin
-    def mutate(self, info, current_user, id, name=None, location=None, capacity=None):
+    def mutate(self, info, current_user, id, name=None, city=None, capacity=None):
         query_data = {
             'query': '''
-            mutation($id: Int!, $name: String, $location: String, $capacity: Int) {
-                updateCinema(id: $id, name: $name, location: $location, capacity: $capacity) {
+            mutation($id: Int!, $name: String, $city: String, $capacity: Int) {
+                updateCinema(id: $id, name: $name, city: $city, capacity: $capacity) {
                     cinema {
                         id
                         name
-                        location
+                        city
                         capacity
                     }
                     success
@@ -1378,7 +3090,7 @@ class UpdateCinema(Mutation):
             'variables': {
                 'id': id,
                 'name': name,
-                'location': location,
+                'city': city,
                 'capacity': capacity
             }
         }
@@ -1401,6 +3113,523 @@ class UpdateCinema(Mutation):
             cinema=update_result.get('cinema'),
             success=update_result.get('success', False),
             message=update_result.get('message', 'Cinema update completed')
+        )
+
+class CreateAuditorium(Mutation):
+    class Arguments:
+        cinema_id = Int(required=True)
+        name = String(required=True)
+        seat_layout = JSONString()
+
+    Output = CreateAuditoriumResponse
+
+    @require_admin
+    def mutate(self, info, current_user, cinema_id, name, seat_layout=None):
+        
+        if isinstance(seat_layout, dict):
+            seat_layout = json.dumps(seat_layout)
+            
+        query_data = {
+            'query': '''
+            mutation($cinemaId: Int!, $name: String!, $seatLayout: JSONString) {
+                createAuditorium(cinemaId: $cinemaId, name: $name, seatLayout: $seatLayout) {
+                    auditorium { 
+                        id 
+                        cinemaId 
+                        name 
+                        seatLayout 
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {'cinemaId': cinema_id, 'name': name, 'seatLayout': seat_layout}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateAuditoriumResponse(auditorium=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            return CreateAuditoriumResponse(auditorium=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        create_result = result.get('data', {}).get('createAuditorium', {})
+        auditorium_data = create_result.get('auditorium')
+        if auditorium_data:
+            # Transform camelCase response to snake_case for gateway AuditoriumType
+            transformed_auditorium = {
+                'id': auditorium_data.get('id'),
+                'cinema_id': auditorium_data.get('cinemaId'),  # Transform camelCase to snake_case
+                'name': auditorium_data.get('name'),
+                'seat_layout': auditorium_data.get('seatLayout'),  # Transform camelCase to snake_case
+                'cinema': auditorium_data.get('cinema')
+            }
+            
+            return CreateAuditoriumResponse(
+                auditorium=transformed_auditorium,
+                success=create_result.get('success', False),
+                message=create_result.get('message', 'Auditorium operation completed')
+            )
+        
+        return CreateAuditoriumResponse(
+            auditorium=None,
+            success=create_result.get('success', False),
+            message=create_result.get('message', 'Auditorium operation completed')
+        )
+
+class UpdateAuditorium(Mutation):
+    class Arguments:
+        id = Int(required=True)
+        cinema_id = Int()
+        name = String()
+        seat_layout = JSONString()
+
+    Output = CreateAuditoriumResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id, cinema_id=None, name=None, seat_layout=None):
+        
+        if isinstance(seat_layout, dict):
+            seat_layout = json.dumps(seat_layout)
+            
+        query_data = {
+            'query': '''
+            mutation($id: Int!, $cinemaId: Int, $name: String, $seatLayout: JSONString) {
+                updateAuditorium(id: $id, cinemaId: $cinemaId, name: $name, seatLayout: $seatLayout) {
+                    auditorium { 
+                        id 
+                        cinemaId 
+                        name 
+                        seatLayout 
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': id,
+                'cinemaId': cinema_id, 
+                'name': name, 
+                'seatLayout': seat_layout
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateAuditoriumResponse(auditorium=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            return CreateAuditoriumResponse(auditorium=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateAuditorium', {})
+        auditorium_data = update_result.get('auditorium')
+        if auditorium_data:
+            # Transform camelCase response to snake_case for gateway AuditoriumType
+            transformed_auditorium = {
+                'id': auditorium_data.get('id'),
+                'cinema_id': auditorium_data.get('cinemaId'),  # Transform camelCase to snake_case
+                'name': auditorium_data.get('name'),
+                'seat_layout': auditorium_data.get('seatLayout'),  # Transform camelCase to snake_case
+                'cinema': auditorium_data.get('cinema')
+            }
+            
+            return CreateAuditoriumResponse(
+                auditorium=transformed_auditorium,
+                success=update_result.get('success', False),
+                message=update_result.get('message', 'Auditorium update completed')
+            )
+        
+        return CreateAuditoriumResponse(
+            auditorium=None,
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Auditorium update completed')
+        )
+
+class DeleteAuditorium(Mutation):
+    class Arguments:
+        id = Int(required=True)
+
+    Output = DeleteResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id):
+        query_data = {
+            'query': '''
+            mutation($id: Int!) {
+                deleteAuditorium(id: $id) {
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {'id': id}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return DeleteResponse(success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        delete_result = result.get('data', {}).get('deleteAuditorium', {})
+        return DeleteResponse(
+            success=delete_result.get('success', False),
+            message=delete_result.get('message', 'Auditorium deletion completed')
+        )
+        
+class CreateShowtime(Mutation):
+    class Arguments:
+        movieId = Int(required=True)  # Changed to camelCase
+        auditoriumId = Int(required=True)  # Changed to camelCase
+        startTime = DateTime(required=True)  # Changed to camelCase
+        price = Float(required=True)
+
+    Output = CreateShowtimeResponse
+
+    @require_admin
+    def mutate(self, info, current_user, movieId, auditoriumId, startTime, price):
+        # Step 1: Validate movie exists in movie service
+        movie_check_query = {
+            'query': f'''
+            {{
+                movie(id: {movieId}) {{
+                    id
+                    title
+                }}
+            }}
+            '''
+        }
+        
+        movie_result = make_service_request(SERVICE_URLS['movie'], movie_check_query, 'movie')
+        if not movie_result:
+            return CreateShowtimeResponse(
+                showtime=None, 
+                success=False, 
+                message="Movie service unavailable"
+            )
+        
+        if movie_result.get('errors'):
+            return CreateShowtimeResponse(
+                showtime=None, 
+                success=False, 
+                message=f"Movie with ID {movieId} not found"
+            )
+        
+        movie_data = movie_result.get('data', {}).get('movie')
+        if not movie_data:
+            return CreateShowtimeResponse(
+                showtime=None, 
+                success=False, 
+                message=f"Movie with ID {movieId} does not exist"
+            )
+        
+        # Step 2: Create showtime (original logic)
+        query_data = {
+            'query': '''
+            mutation($movieId: Int!, $auditoriumId: Int!, $startTime: DateTime!, $price: Float!) {
+                createShowtime(movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
+                    showtime { 
+                        id 
+                        movieId 
+                        auditoriumId 
+                        startTime 
+                        price
+                        auditorium {
+                            id
+                            name
+                            cinema {
+                                id
+                                name
+                                city
+                            }
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'movieId': movieId, 
+                'auditoriumId': auditoriumId, 
+                'startTime': startTime.isoformat(), 
+                'price': price
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateShowtimeResponse(showtime=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', str(error)))
+                elif isinstance(error, str):
+                    error_messages.append(error)
+                else:
+                    error_messages.append(str(error))
+            return CreateShowtimeResponse(showtime=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        create_result = result.get('data', {}).get('createShowtime', {})
+        
+        # Transform camelCase response to snake_case for gateway ShowtimeType
+        showtime_data = create_result.get('showtime')
+        if showtime_data:
+            transformed_showtime = {
+                'id': showtime_data.get('id'),
+                'movie_id': showtime_data.get('movieId'),  # Transform camelCase to snake_case
+                'auditorium_id': showtime_data.get('auditoriumId'),  # Transform camelCase to snake_case
+                'start_time': showtime_data.get('startTime'),  # Transform camelCase to snake_case
+                'price': showtime_data.get('price'),
+                'auditorium': showtime_data.get('auditorium')
+            }
+            
+            return CreateShowtimeResponse(
+                showtime=transformed_showtime,
+                success=create_result.get('success', False),
+                message=create_result.get('message', 'Showtime operation completed')
+            )
+        
+        return CreateShowtimeResponse(
+            showtime=None,
+            success=create_result.get('success', False),
+            message=create_result.get('message', 'Showtime operation completed')
+        )
+        
+class UpdateShowtime(Mutation):
+    class Arguments:
+        id = Int(required=True)
+        movieId = Int()  # Changed to camelCase
+        auditoriumId = Int()  # Changed to camelCase
+        startTime = DateTime()  # Changed to camelCase
+        price = Float()
+
+    Output = CreateShowtimeResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id, movieId=None, auditoriumId=None, startTime=None, price=None):
+        # Convert startTime to ISO format if provided
+        start_time_iso = startTime.isoformat() if startTime else None
+        
+        query_data = {
+            'query': '''
+            mutation($id: Int!, $movieId: Int, $auditoriumId: Int, $startTime: DateTime, $price: Float) {
+                updateShowtime(id: $id, movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
+                    showtime { 
+                        id 
+                        movieId 
+                        auditoriumId 
+                        startTime 
+                        price
+                        auditorium {
+                            id
+                            name
+                            cinema {
+                                id
+                                name
+                                city
+                            }
+                        }
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'id': id,
+                'movieId': movieId, 
+                'auditoriumId': auditoriumId, 
+                'startTime': start_time_iso, 
+                'price': price
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return CreateShowtimeResponse(showtime=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return CreateShowtimeResponse(showtime=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateShowtime', {})
+        
+        # Transform camelCase response to snake_case for gateway ShowtimeType
+        showtime_data = update_result.get('showtime')
+        if showtime_data:
+            transformed_showtime = {
+                'id': showtime_data.get('id'),
+                'movie_id': showtime_data.get('movieId'),  # Transform camelCase to snake_case
+                'auditorium_id': showtime_data.get('auditoriumId'),  # Transform camelCase to snake_case
+                'start_time': showtime_data.get('startTime'),  # Transform camelCase to snake_case
+                'price': showtime_data.get('price'),
+                'auditorium': showtime_data.get('auditorium')
+            }
+            
+            # Fetch movie details from movie service
+            movie_id_value = showtime_data.get('movieId')
+            if movie_id_value:
+                movie_query = {
+                    'query': f'''
+                    {{
+                        movie(id: {movie_id_value}) {{
+                            id
+                            title
+                            genre
+                            duration
+                            description
+                            releaseDate
+                            posterUrl
+                            rating
+                        }}
+                    }}
+                    '''
+                }
+                
+                movie_result = make_service_request(SERVICE_URLS['movie'], movie_query, 'movie')
+                if movie_result and not movie_result.get('errors'):
+                    movie_data = movie_result.get('data', {}).get('movie')
+                    if movie_data:
+                        # Add movie details to showtime
+                        transformed_showtime['movie'] = {
+                            'id': movie_data.get('id'),
+                            'title': movie_data.get('title'),
+                            'genre': movie_data.get('genre'),
+                            'duration': movie_data.get('duration'),
+                            'description': movie_data.get('description'),
+                            'releaseDate': movie_data.get('releaseDate'),
+                            'posterUrl': movie_data.get('posterUrl'),
+                            'rating': movie_data.get('rating')
+                        }
+            
+            return CreateShowtimeResponse(
+                showtime=transformed_showtime,
+                success=update_result.get('success', False),
+                message=update_result.get('message', 'Showtime update completed')
+            )
+        
+        return CreateShowtimeResponse(
+            showtime=None,
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Showtime update completed')
+        )
+
+class DeleteShowtime(Mutation):
+    class Arguments:
+        id = Int(required=True)
+
+    Output = DeleteResponse
+
+    @require_admin
+    def mutate(self, info, current_user, id):
+        query_data = {
+            'query': '''
+            mutation($id: Int!) {
+                deleteShowtime(id: $id) {
+                    success
+                    message
+                }
+            }
+            ''',
+            'variables': {'id': id}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return DeleteResponse(success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return DeleteResponse(success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        delete_result = result.get('data', {}).get('deleteShowtime', {})
+        return DeleteResponse(
+            success=delete_result.get('success', False),
+            message=delete_result.get('message', 'Showtime deletion completed')
+        )
+
+class UpdateSeatStatus(Mutation):
+    class Arguments:
+        showtime_id = Int(required=True)
+        seat_number = String(required=True)
+        status = String(required=True)
+        booking_id = Int()
+
+    Output = UpdateSeatStatusResponse
+
+    @require_auth
+    def mutate(self, info, current_user, showtime_id, seat_number, status, booking_id=None):
+        query_data = {
+            'query': '''
+            mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
+                updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
+                    seatStatus { 
+                        id 
+                        showtime_id 
+                        seat_number 
+                        status
+                        booking_id
+                        updated_at
+                    }
+                    success 
+                    message
+                }
+            }
+            ''',
+            'variables': {
+                'showtimeId': showtime_id,
+                'seatNumber': seat_number,
+                'status': status,
+                'bookingId': booking_id
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        if not result:
+            return UpdateSeatStatusResponse(seat_status=None, success=False, message="Cinema service unavailable")
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return UpdateSeatStatusResponse(seat_status=None, success=False, message=f"Error: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updateSeatStatus', {})
+        return UpdateSeatStatusResponse(
+            seat_status=update_result.get('seatStatus'),
+            success=update_result.get('success', False),
+            message=update_result.get('message', 'Seat status update completed')
         )
 
 class DeleteCinema(Mutation):
@@ -1462,6 +3691,14 @@ class Mutation(ObjectType):
     create_cinema = CreateCinema.Field()
     update_cinema = UpdateCinema.Field()
     delete_cinema = DeleteCinema.Field()
+    create_auditorium = CreateAuditorium.Field()
+    update_auditorium = UpdateAuditorium.Field()  
+    delete_auditorium = DeleteAuditorium.Field() 
+    create_showtime = CreateShowtime.Field()
+    update_showtime = UpdateShowtime.Field() 
+    delete_showtime = DeleteShowtime.Field()
     delete_user = DeleteUser.Field()
+    
+    update_seat_status = UpdateSeatStatus.Field()
 
 schema = Schema(query=Query, mutation=Mutation)

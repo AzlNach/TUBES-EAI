@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cinema Booking System - Your Movie Experience</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Custom CSS -->
+  <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container">
+      <a class="navbar-brand" href="/dashboard">
+        <i class="fas fa-film me-2"></i>Cinema
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link active" href="/dashboard">
+              <i class="fas fa-home me-1"></i> Home
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/movies">
+              <i class="fas fa-video me-1"></i> Movies
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/cinemas">
+              <i class="fas fa-building me-1"></i> Cinemas
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/showtimes">
+              <i class="fas fa-calendar-alt me-1"></i> Showtimes
+            </a>
+          </li>
+        </ul>
+        <div class="navbar-nav" id="navbar-auth">
+          <!-- Auth buttons will be dynamically inserted -->
+          <a class="nav-link" href="/login">
+            <i class="fas fa-sign-in-alt me-1"></i> Login
+          </a>
+          <a class="nav-link" href="/register">
+            <i class="fas fa-user-plus me-1"></i> Register
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero-section">
+    <div class="container text-center py-5 hero-content">
+      <h1 class="hero-title text-white">Your Ultimate Movie Experience</h1>
+      <p class="hero-tagline text-white">Book tickets for the latest movies at your favorite cinemas</p>
+      <div class="d-flex justify-content-center gap-3">
+        <a href="/movies" class="btn btn-primary btn-lg btn-hero">
+          <i class="fas fa-film me-2"></i> Browse Movies
+        </a>
+        <a href="/register" class="btn btn-outline-light btn-lg">
+          <i class="fas fa-user-plus me-2"></i> Join Free
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Featured Movies -->
+  <section class="container py-5">
+    <div class="row mb-4">
+      <div class="col-md-8">
+        <h2 class="section-title">Featured Movies</h2>
+      </div>
+      <div class="col-md-4 text-end">
+        <a href="/movies" class="btn btn-outline-primary">
+          View All <i class="fas fa-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+    <div class="row g-4" id="featured-movies">
+      <div class="col-md-12 text-center loader-container">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading movies...</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Popular Cinemas -->
+  <section class="py-5 section-alt">
+    <div class="container">
+      <div class="row mb-4">
+        <div class="col-md-8">
+          <h2 class="section-title">Popular Cinemas</h2>
+        </div>
+        <div class="col-md-4 text-end">
+          <a href="/cinemas" class="btn btn-outline-primary">
+            View All <i class="fas fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+      <div class="row g-4" id="popular-cinemas">
+        <!-- Cinemas will be loaded here -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="container py-5">
+    <h2 class="section-title text-center mb-5">Why Choose Our Cinema Booking</h2>
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon mb-4">
+              <i class="fas fa-ticket-alt fa-3x text-primary"></i>
+            </div>
+            <h4>Easy Booking</h4>
+            <p class="text-muted">Book your movie tickets online with just a few clicks. No queues, no hassle.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon mb-4">
+              <i class="fas fa-couch fa-3x text-primary"></i>
+            </div>
+            <h4>Choose Your Seats</h4>
+            <p class="text-muted">Select your preferred seats from our interactive seating chart.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon mb-4">
+              <i class="fas fa-mobile-alt fa-3x text-primary"></i>
+            </div>
+            <h4>Mobile Tickets</h4>
+            <p class="text-muted">Get your tickets instantly on your mobile device. No printing required.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row gy-4">
+        <div class="col-lg-4 col-md-6">
+          <h5 class="footer-brand">
+            <i class="fas fa-film me-2"></i>Cinema
+          </h5>
+          <p>Your trusted movie ticket booking platform connecting you with the best cinema experiences.</p>
+          <div class="mt-4">
+            <a href="#" class="text-white me-3 fs-5"><i class="fab fa-facebook"></i></a>
+            <a href="#" class="text-white me-3 fs-5"><i class="fab fa-twitter"></i></a>
+            <a href="#" class="text-white me-3 fs-5"><i class="fab fa-instagram"></i></a>
+            <a href="#" class="text-white fs-5"><i class="fab fa-youtube"></i></a>
+          </div>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <h5>Quick Links</h5>
+          <ul class="list-unstyled footer-list">
+            <li><a href="/movies" class="text-white"><i class="fas fa-angle-right me-2"></i>Movies</a></li>
+            <li><a href="/cinemas" class="text-white"><i class="fas fa-angle-right me-2"></i>Cinemas</a></li>
+            <li><a href="/showtimes" class="text-white"><i class="fas fa-angle-right me-2"></i>Showtimes</a></li>
+            <li><a href="/about" class="text-white"><i class="fas fa-angle-right me-2"></i>About Us</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <h5>Support</h5>
+          <ul class="list-unstyled footer-list">
+            <li><a href="/faq" class="text-white"><i class="fas fa-angle-right me-2"></i>FAQ</a></li>
+            <li><a href="/help" class="text-white"><i class="fas fa-angle-right me-2"></i>Help Center</a></li>
+            <li><a href="/privacy" class="text-white"><i class="fas fa-angle-right me-2"></i>Privacy Policy</a></li>
+            <li><a href="/terms" class="text-white"><i class="fas fa-angle-right me-2"></i>Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <h5>Contact</h5>
+          <ul class="list-unstyled footer-list">
+            <li><i class="fas fa-envelope me-2"></i>info@cinema.com</li>
+            <li><i class="fas fa-phone me-2"></i>(123) 456-7890</li>
+            <li><i class="fas fa-map-marker-alt me-2"></i>123 Cinema Street, Movie City</li>
+          </ul>
+        </div>
+      </div>
+      <hr class="footer-divider">
+      <div class="text-center">
+        <p class="mb-0">&copy; 2024 Cinema Booking System. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/main.js"></script>
+</body>
+</html>
