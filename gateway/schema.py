@@ -325,8 +325,27 @@ class CouponType(ObjectType):
     discountPercentage = Float()
     validUntil = String()
     isActive = Boolean()
+    stock = Int()  # Tambahkan field stock
     createdAt = String()
     updatedAt = String()
+
+class UserEligibilityType(ObjectType):
+    userId = Int()          # ✓ Changed from user_id to userId
+    paymentCount = Int()    # ✓ Changed from payment_count to paymentCount
+    isEligible = Boolean()  # ✓ Changed from is_eligible to isEligible
+    paymentsNeeded = Int()  # ✓ Changed from payments_needed to paymentsNeeded
+
+class RedeemCouponResponse(ObjectType):
+    success = Boolean()
+    message = String()
+    discountAmount = Float()  # ✓ Changed from discount_amount to discountAmount
+    coupon = Field(CouponType)
+
+class UpdatePaymentCountResponse(ObjectType):
+    userId = Int()          # ✓ Changed from user_id to userId
+    paymentCount = Int()    # ✓ Changed from payment_count to paymentCount
+    isEligible = Boolean()  # ✓ Changed from is_eligible to isEligible
+    paymentsNeeded = Int() 
     
 # ============================================================================
 # RESPONSE TYPES
@@ -410,8 +429,8 @@ class UpdateCinemaResponse(ObjectType):
 class Query(ObjectType):
     # Public queries (no authentication required)
     test = String()
-    publicMovies = List(MovieType)  # Add this for public access
-    publicCinemas = List(CinemaType) # Add this for public access
+    publicMovies = List(MovieType)
+    publicCinemas = List(CinemaType)
     
     # User authenticated queries
     movies = List(MovieType)
@@ -419,8 +438,12 @@ class Query(ObjectType):
     auditoriums = List(AuditoriumType, cinema_id=Int())
     showtimes = List(ShowtimeType, movie_id=Int(), auditorium_id=Int())
     seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))
-    coupons = List(CouponType)
-    availableCoupons = List(CouponType)
+    
+    # COUPON QUERIES - DIPERBAIKI NAMA FIELD
+    availableCoupons = List(CouponType)  # ✓ Field name sudah benar
+    userEligibility = Field(UserEligibilityType)  # ✓ Changed from user_eligibility ke userEligibility
+    coupons = List(CouponType)  # ✓ Admin only
+    
     my_bookings = List(BookingType)
     my_payments = List(PaymentType)
     
@@ -520,26 +543,40 @@ class Query(ObjectType):
                         # Transform camelCase to snake_case to match gateway AuditoriumType
                         if 'seatLayout' in auditorium:
                             auditorium['seat_layout'] = auditorium.pop('seatLayout')
-        
         return cinemas
     
     @require_auth
-    def resolve_availableCoupons(self, info, current_user):  # ← Changed method name
-        query_data = {'query': '{ availableCoupons { id code name discountPercentage validUntil isActive } }'}
+    def resolve_availableCoupons(self, info, current_user):
+        """Get available coupons - user can see available coupons"""
+        query_data = {'query': '{ availableCoupons { id code name discountPercentage validUntil isActive stock } }'}
         result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
         
         response = handle_service_response(result, 'coupon', 'availableCoupons')
         if not response['success']:
             raise Exception(response['error'])
-        return response['data']
+        return response['data'] or []
+    
 
     @require_admin
     def resolve_coupons(self, info, current_user):
-        """Get all coupons - admin only (read-only access)"""
-        query_data = {'query': '{ coupons { id code name discountPercentage validUntil isActive createdAt } }'}  # ← Changed field names
+        """Get all coupons - admin only"""
+        query_data = {'query': '{ coupons { id code name discountPercentage validUntil isActive stock createdAt updatedAt } }'}
         result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
         
         response = handle_service_response(result, 'coupon', 'coupons')
+        if not response['success']:
+            raise Exception(response['error'])
+        return response['data'] or []
+
+    @require_auth
+    def resolve_userEligibility(self, info, current_user):
+        """Check if current user is eligible for coupons"""
+        query_data = {
+            'query': '{ userEligibility(userId: %d) { userId paymentCount isEligible paymentsNeeded } }' % current_user['user_id']
+        }
+        result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
+        
+        response = handle_service_response(result, 'coupon', 'userEligibility')
         if not response['success']:
             raise Exception(response['error'])
         return response['data']
@@ -2524,15 +2561,18 @@ class DeleteBooking(Mutation):
 
 class CreatePayment(Mutation):
     class Arguments:
-        # Removed amount from required arguments - will be calculated automatically
         bookingId = Int(required=True)
         paymentMethod = String()
         paymentProofImage = String()
-
+        couponCode = String()  # ✓ Optional coupon code
+    
     Output = CreatePaymentResponse
 
     @require_auth
-    def mutate(self, info, current_user, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None):
+    def mutate(self, info, current_user, bookingId, paymentMethod='CREDIT_CARD', paymentProofImage=None, couponCode=None):
+        print(f"=== PAYMENT DEBUG START ===")
+        print(f"User: {current_user['user_id']}, Booking: {bookingId}, Coupon: {couponCode}")
+        print(f"SERVICE_URLS: {SERVICE_URLS}")
         # Step 1: Validate booking exists and get booking details
         booking_check_query = {
             'query': f'''
@@ -2646,36 +2686,104 @@ class CreatePayment(Mutation):
                 message="No reserved seats found for this booking"
             )
 
-        # Step 4: Calculate amount automatically (seat count × showtime price)
+    # Step 4: Calculate original amount
         showtime_price = float(showtime_data.get('price', 0))
         seat_count = len(reserved_seats)
         calculated_amount = showtime_price * seat_count
         
-        print(f"Payment calculation: {seat_count} seats × {showtime_price} = {calculated_amount}")  # Debug log
-
-        # Step 5: Create payment with calculated amount (status starts as 'pending')
+        print(f"CALCULATION: {seat_count} seats × ${showtime_price} = ${calculated_amount}")
+        
+        # ✅ Apply coupon discount
+        discount_amount = 0.0
+        final_amount = calculated_amount
+        coupon_success = False
+        
+        if couponCode:
+            print(f"=== COUPON REDEMPTION START ===")
+            try:
+                if 'coupon' not in SERVICE_URLS:
+                    print("❌ COUPON SERVICE NOT CONFIGURED!")
+                    return CreatePaymentResponse(
+                        payment=None,
+                        success=False,
+                        message="Coupon service not available"
+                    )
+                
+                coupon_query = {
+                    'query': '''
+                    mutation($userId: Int!, $code: String!, $bookingAmount: Float!) {
+                        redeemCoupon(userId: $userId, code: $code, bookingAmount: $bookingAmount) {
+                            success 
+                            message 
+                            discountAmount 
+                            coupon { 
+                                id 
+                                code 
+                                name 
+                                discountPercentage 
+                            }
+                        }
+                    }
+                    ''',
+                    'variables': {
+                        'userId': current_user['user_id'],
+                        'code': couponCode,
+                        'bookingAmount': calculated_amount
+                    }
+                }
+                
+                print(f"Coupon query: {coupon_query}")
+                coupon_result = make_service_request(SERVICE_URLS['coupon'], coupon_query, 'coupon')
+                print(f"Coupon result: {coupon_result}")
+                
+                if coupon_result and not coupon_result.get('errors'):
+                    redeem_result = coupon_result.get('data', {}).get('redeemCoupon', {})
+                    print(f"Redeem result: {redeem_result}")
+                    
+                    if redeem_result.get('success'):
+                        discount_amount = float(redeem_result.get('discountAmount', 0.0))
+                        final_amount = calculated_amount - discount_amount
+                        coupon_success = True
+                        print(f"✅ COUPON SUCCESS: discount=${discount_amount}, final=${final_amount}")
+                    else:
+                        print(f"❌ COUPON FAILED: {redeem_result.get('message')}")
+                        return CreatePaymentResponse(
+                            payment=None,
+                            success=False,
+                            message=f"Coupon error: {redeem_result.get('message')}"
+                        )
+                else:
+                    print(f"❌ COUPON SERVICE ERROR: {coupon_result}")
+                    return CreatePaymentResponse(
+                        payment=None,
+                        success=False,
+                        message="Coupon service error"
+                    )
+                    
+            except Exception as e:
+                print(f"❌ COUPON EXCEPTION: {str(e)}")
+                return CreatePaymentResponse(
+                    payment=None,
+                    success=False,
+                    message=f"Coupon processing failed: {str(e)}"
+                )
+        
+        print(f"FINAL AMOUNTS: original=${calculated_amount}, discount=${discount_amount}, final=${final_amount}")
+        
+        # ✅ Create payment with final amount
         payment_query = {
             'query': '''
             mutation($amount: Float!, $userId: Int!, $bookingId: Int!, $paymentMethod: String!, $paymentProofImage: String) {
                 createPayment(amount: $amount, userId: $userId, bookingId: $bookingId, paymentMethod: $paymentMethod, paymentProofImage: $paymentProofImage) {
                     payment {
-                        id
-                        userId
-                        bookingId
-                        amount
-                        paymentMethod
-                        status
-                        paymentProofImage
-                        createdAt
-                        updatedAt
+                        id userId bookingId amount paymentMethod status paymentProofImage createdAt updatedAt
                     }
-                    success
-                    message
+                    success message
                 }
             }
             ''',
             'variables': {
-                'amount': calculated_amount,
+                'amount': final_amount,  # ✅ CRITICAL: Use discounted amount
                 'userId': current_user['user_id'],
                 'bookingId': bookingId,
                 'paymentMethod': paymentMethod,
@@ -2683,33 +2791,25 @@ class CreatePayment(Mutation):
             }
         }
         
+        print(f"Payment query: {payment_query}")
         payment_result = make_service_request(SERVICE_URLS['payment'], payment_query, 'payment')
-        if not payment_result:
+        print(f"Payment result: {payment_result}")
+        
+        if not payment_result or payment_result.get('errors'):
+            print("❌ PAYMENT FAILED")
             return CreatePaymentResponse(
                 payment=None,
                 success=False,
-                message="Payment service unavailable"
+                message="Payment processing failed"
             )
         
-        if payment_result.get('errors'):
-            error_messages = []
-            for error in payment_result['errors']:
-                if isinstance(error, dict):
-                    error_messages.append(error.get('message', str(error)))
-                else:
-                    error_messages.append(str(error))
-            return CreatePaymentResponse(
-                payment=None,
-                success=False,
-                message=f"Payment errors: {'; '.join(error_messages)}"
-            )
-
         payment_data = payment_result.get('data', {}).get('createPayment', {})
         if not payment_data.get('success'):
+            print("❌ PAYMENT NOT SUCCESSFUL")
             return CreatePaymentResponse(
                 payment=None,
                 success=False,
-                message=payment_data.get('message', 'Failed to create payment')
+                message=payment_data.get('message', 'Payment failed')
             )
 
         payment_service_data = payment_data.get('payment')
@@ -2820,25 +2920,66 @@ class CreatePayment(Mutation):
 
         # Step 9: Transform payment data properly with final status
         if payment_service_data:
+            # Update CreatePayment mutation untuk auto-increment payment count
+            try:
+                count_update_query = {
+                    'query': '''
+                    mutation($userId: Int!) {
+                        updatePaymentCount(userId: $userId) {
+                            userId paymentCount isEligible paymentsNeeded
+                        }
+                    }
+                    ''',
+                    'variables': {'userId': current_user['user_id']}  # ✓ Changed field name
+                }
+                
+                count_result = make_service_request(SERVICE_URLS['coupon'], count_update_query, 'coupon')
+                
+                coupon_message = ""
+                if count_result and not isinstance(count_result, str) and not count_result.get('errors'):
+                    count_data = count_result.get('data', {}).get('updatePaymentCount', {})
+                    if count_data:
+                        print(f"Updated payment count for user {current_user['user_id']}: {count_data}")
+                        
+                        if count_data.get('isEligible'):  # ✓ Changed field name
+                            coupon_message = f" You are now eligible for coupon redemption! (Payment #{count_data.get('paymentCount')})"
+                        else:
+                            payments_needed = count_data.get('paymentsNeeded', 3)  # ✓ Changed field name
+                            coupon_message = f" Payment count: {count_data.get('paymentCount')}. Need {payments_needed} more payments for coupon eligibility."
+            except Exception as e:
+                print(f"Error updating payment count: {str(e)}")
+                coupon_message = ""
+
             transformed_payment = {
                 'id': payment_service_data.get('id'),
                 'userId': payment_service_data.get('userId') or current_user['user_id'],
                 'bookingId': payment_service_data.get('bookingId') or bookingId,
-                'amount': payment_service_data.get('amount') or calculated_amount,
+                'amount': final_amount,  # ✓ Use final amount with discount
                 'paymentMethod': payment_service_data.get('paymentMethod') or paymentMethod,
-                'status': 'success',  # Set final status to success
+                'status': 'success',
                 'paymentProofImage': payment_service_data.get('paymentProofImage') or paymentProofImage,
                 'createdAt': payment_service_data.get('createdAt'),
                 'updatedAt': payment_service_data.get('updatedAt'),
-                'canBeDeleted': False  # Success payments cannot be deleted
+                'canBeDeleted': False
             }
             
-            print(f"Final transformed payment: {transformed_payment}")
+             # ✓ PERBAIKI: Enhanced success message with discount info
+            success_message = f"Payment successful! "
+            if coupon_success:
+                success_message += f"Original: ${calculated_amount:.2f}, Discount: ${discount_amount:.2f}, Final: ${final_amount:.2f}. "
+            else:
+                success_message += f"Amount: ${final_amount:.2f}. "
+            
+            print(f"=== PAYMENT DEBUG END ===")
             
             return CreatePaymentResponse(
-                payment=transformed_payment,
+                payment={
+                    'id': payment_data['payment']['id'],
+                    'amount': final_amount,  # ✅ Show discounted amount
+                    'status': 'success'
+                },
                 success=True,
-                message=f"Payment successful! Amount: {seat_count} seats × ${showtime_price:,.0f} = ${calculated_amount:,.0f}. Payment status: SUCCESS, Booking status: PAID. Tickets created automatically."
+                message=success_message
             )
         else:
             return CreatePaymentResponse(
@@ -3106,41 +3247,6 @@ class CreateCinema(Mutation):
             cinema=create_result.get('cinema'),
             success=create_result.get('success', False),
             message=create_result.get('message', 'Cinema operation completed')
-        )
-
-class UseCoupon(Mutation):
-    class Arguments:
-        code = String(required=True)
-        booking_amount = Float(required=True)
-
-    Output = UseCouponResponse
-
-    @require_auth
-    def mutate(self, info, current_user, code, booking_amount):
-        query_data = {
-            'query': '''
-            mutation($code: String!, $booking_amount: Float!) {
-                useCoupon(code: $code, booking_amount: $booking_amount) {
-                    success message discount_amount
-                }
-            }
-            ''',
-            'variables': {'code': code, 'booking_amount': booking_amount}
-        }
-        
-        result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
-        if not result:
-            return UseCouponResponse(success=False, message="Coupon service unavailable", discount_amount=0.0)
-        
-        if result.get('errors'):
-            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
-            return UseCouponResponse(success=False, message=f"Error: {'; '.join(error_messages)}", discount_amount=0.0)
-        
-        use_result = result.get('data', {}).get('useCoupon', {})
-        return UseCouponResponse(
-            success=use_result.get('success', False),
-            message=use_result.get('message', 'Coupon use completed'),
-            discount_amount=use_result.get('discount_amount', 0.0)
         )
 
 # Tambahkan mutation UpdateCinema setelah class UseCoupon
@@ -3796,6 +3902,181 @@ class DeleteCinema(Mutation):
             message=delete_result.get('message', 'Cinema deletion completed')
         )
         
+class CreateCoupon(Mutation):
+    class Arguments:
+        code = String(required=True)
+        name = String(required=True)
+        discount_percentage = Float(required=True)
+        valid_until = String(required=True)
+        stock = Int(required=True)
+    
+    Output = CreateCouponResponse
+
+    @require_admin
+    def mutate(self, info, current_user, code, name, discount_percentage, valid_until, stock):
+        query_data = {
+            'query': '''
+            mutation($code: String!, $name: String!, $discount_percentage: Float!, $valid_until: String!, $stock: Int!) {
+                createCoupon(code: $code, name: $name, discountPercentage: $discount_percentage, validUntil: $valid_until, stock: $stock) {
+                    coupon { id code name discountPercentage validUntil isActive stock }
+                    success message
+                }
+            }
+            ''',
+            'variables': {
+                'code': code,
+                'name': name,
+                'discount_percentage': discount_percentage,
+                'valid_until': valid_until,
+                'stock': stock
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
+        
+        # ✓ PERBAIKI ERROR HANDLING
+        if not result:
+            return CreateCouponResponse(
+                coupon=None,
+                success=False,
+                message="Coupon service unavailable"
+            )
+        
+        if result.get('errors'):
+            error_messages = [error.get('message', 'Unknown error') for error in result['errors']]
+            return CreateCouponResponse(
+                coupon=None,
+                success=False,
+                message=f"Error: {'; '.join(error_messages)}"
+            )
+        
+        create_result = result.get('data', {}).get('createCoupon', {})
+        return CreateCouponResponse(
+            coupon=create_result.get('coupon'),
+            success=create_result.get('success', False),
+            message=create_result.get('message', 'Coupon creation completed')
+        )
+
+class RedeemCoupon(Mutation):
+    class Arguments:
+        code = String(required=True)
+        bookingAmount = Float(required=True)  # ✓ Changed from booking_amount to bookingAmount
+    
+    Output = RedeemCouponResponse
+
+    @require_auth
+    def mutate(self, info, current_user, code, bookingAmount):  # ✓ Changed parameter name
+        query_data = {
+            'query': '''
+            mutation($userId: Int!, $code: String!, $bookingAmount: Float!) {
+                redeemCoupon(userId: $userId, code: $code, bookingAmount: $bookingAmount) {
+                    success message discountAmount 
+                    coupon { id code name discountPercentage }
+                }
+            }
+            ''',
+            'variables': {
+                'userId': current_user['user_id'],  # ✓ Changed field name
+                'code': code, 
+                'bookingAmount': bookingAmount      # ✓ Changed field name
+            }
+        }
+        
+        result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
+        
+        if not result:
+            return RedeemCouponResponse(
+                success=False,
+                message="Coupon service unavailable",
+                discountAmount=0.0,
+                coupon=None
+            )
+        
+        if isinstance(result, str):
+            return RedeemCouponResponse(
+                success=False,
+                message=f"Service error: {result}",
+                discountAmount=0.0,
+                coupon=None
+            )
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', 'Unknown error'))
+                else:
+                    error_messages.append(str(error))
+            
+            return RedeemCouponResponse(
+                success=False,
+                message=f"Error: {'; '.join(error_messages)}",
+                discountAmount=0.0,
+                coupon=None
+            )
+        
+        redeem_result = result.get('data', {}).get('redeemCoupon', {})
+        return RedeemCouponResponse(
+            success=redeem_result.get('success', False),
+            message=redeem_result.get('message', 'Coupon redemption completed'),
+            discountAmount=redeem_result.get('discountAmount', 0.0),  # ✓ Changed field name
+            coupon=redeem_result.get('coupon')
+        )
+
+class UpdatePaymentCount(Mutation):
+    class Arguments:
+        userId = Int(required=True)  # ✓ Changed from user_id to userId
+    
+    Output = UpdatePaymentCountResponse
+
+    @require_admin
+    def mutate(self, info, current_user, userId):  # ✓ Changed parameter name
+        """Admin can update payment count for coupon eligibility"""
+        query_data = {
+            'query': '''
+            mutation($userId: Int!) {
+                updatePaymentCount(userId: $userId) {
+                    userId paymentCount isEligible paymentsNeeded
+                }
+            }
+            ''',
+            'variables': {'userId': userId}  # ✓ Changed field name
+        }
+        
+        result = make_service_request(SERVICE_URLS['coupon'], query_data, 'coupon')
+        
+        if not result:
+            return UpdatePaymentCountResponse(
+                userId=userId,
+                paymentCount=0,
+                isEligible=False,
+                paymentsNeeded=3
+            )
+        
+        if isinstance(result, str):
+            raise Exception(f"Service error: {result}")
+        
+        if result.get('errors'):
+            error_messages = []
+            for error in result['errors']:
+                if isinstance(error, dict):
+                    error_messages.append(error.get('message', 'Unknown error'))
+                else:
+                    error_messages.append(str(error))
+            
+            raise Exception(f"Failed to update payment count: {'; '.join(error_messages)}")
+        
+        update_result = result.get('data', {}).get('updatePaymentCount', {})
+        if not update_result:
+            raise Exception("No data returned from coupon service")
+            
+        return UpdatePaymentCountResponse(
+            userId=update_result.get('userId', userId),        # ✓ Changed field name
+            paymentCount=update_result.get('paymentCount', 0), # ✓ Changed field name
+            isEligible=update_result.get('isEligible', False), # ✓ Changed field name
+            paymentsNeeded=update_result.get('paymentsNeeded', 3)  # ✓ Changed field name
+        )
+        
 # ============================================================================
 # SCHEMA DEFINITION
 # ============================================================================
@@ -3811,10 +4092,10 @@ class Mutation(ObjectType):
     delete_payment = DeletePayment.Field()
     update_booking = UpdateBooking.Field()
     delete_booking = DeleteBooking.Field()
-    use_coupon = UseCoupon.Field()  # ← User dapat menggunakan coupon
+    redeem_coupon = RedeemCoupon.Field()  # CHANGED: dari use_coupon ke redeem_coupon
     update_user = UpdateUser.Field()
     
-    # Admin mutations (NO COUPON CRUD)
+    # Admin mutations
     create_movie = CreateMovie.Field()
     update_movie = UpdateMovie.Field()
     delete_movie = DeleteMovie.Field()
@@ -3828,6 +4109,10 @@ class Mutation(ObjectType):
     update_showtime = UpdateShowtime.Field() 
     delete_showtime = DeleteShowtime.Field()
     delete_user = DeleteUser.Field()
+    
+    # Admin coupon mutations
+    create_coupon = CreateCoupon.Field()  # TAMBAH: Admin bisa create coupon
+    update_payment_count = UpdatePaymentCount.Field()  # TAMBAH: Admin bisa update payment count
     
     update_seat_status = UpdateSeatStatus.Field()
 
