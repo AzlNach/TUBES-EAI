@@ -50,10 +50,10 @@ class CreateBookingResponse(ObjectType):
 
 class CreateBooking(Mutation):
     class Arguments:
-        userId = Int(required=True)  # Changed to camelCase
-        showtimeId = Int(required=True)  # Changed to camelCase
-        seatNumbers = List(String, required=True)  # Changed to camelCase
-        totalPrice = Float()  # Changed to camelCase
+        userId = Int(required=True)
+        showtimeId = Int(required=True)
+        seatNumbers = List(String, required=True)
+        totalPrice = Float()
 
     Output = CreateBookingResponse
 
@@ -61,14 +61,29 @@ class CreateBooking(Mutation):
         try:
             # Step 1: Create booking first
             booking = Booking(
-                user_id=userId,  # Map camelCase to snake_case
-                showtime_id=showtimeId,  # Map camelCase to snake_case
-                total_price=totalPrice,  # Map camelCase to snake_case
+                user_id=userId,
+                showtime_id=showtimeId,
+                total_price=totalPrice,
                 status='PENDING'
             )
             booking.save()
             
-            # Step 2: Update seat statuses in cinema service to RESERVED
+            print(f"Booking {booking.id} created, now creating tickets for seats: {seatNumbers}")
+            
+            # Step 2: AUTOMATICALLY create tickets for each seat
+            created_tickets = []
+            for seat_number in seatNumbers:
+                ticket = Ticket(
+                    booking_id=booking.id,
+                    seat_number=seat_number
+                )
+                ticket.save()
+                created_tickets.append(ticket)
+                print(f"Created ticket ID {ticket.id} for seat {seat_number}")
+            
+            print(f"Successfully created {len(created_tickets)} tickets for booking {booking.id}")
+            
+            # Step 3: Update seat statuses in cinema service to RESERVED
             failed_seats = []
             for seat_number in seatNumbers:
                 seat_update_query = {
@@ -94,7 +109,7 @@ class CreateBooking(Mutation):
                     timeout=30,
                     headers={'Content-Type': 'application/json'}
                 )
-                
+
                 if not response.ok:
                     failed_seats.append(seat_number)
                     continue
@@ -103,19 +118,26 @@ class CreateBooking(Mutation):
                 if response_data.get('errors') or not response_data.get('data', {}).get('updateSeatStatus', {}).get('success'):
                     failed_seats.append(seat_number)
             
-            # If any seat reservation failed, rollback booking
+            # If any seat reservation failed, rollback booking and tickets
             if failed_seats:
+                # Delete created tickets
+                for ticket in created_tickets:
+                    ticket.delete()
+                # Delete booking
                 booking.delete()
                 return CreateBookingResponse(
                     booking=None,
                     success=False,
-                    message=f"Failed to reserve seats: {', '.join(failed_seats)}. Booking cancelled."
+                    message=f"Failed to reserve seats: {', '.join(failed_seats)}. Booking and tickets cancelled."
                 )
+            
+            # Set tickets on booking object for response
+            booking.tickets = created_tickets
             
             return CreateBookingResponse(
                 booking=booking,
                 success=True,
-                message="Booking created successfully and seats reserved"
+                message=f"Booking created successfully with {len(created_tickets)} tickets and seats reserved"
             )
         except Exception as e:
             traceback.print_exc()
@@ -265,11 +287,17 @@ class DeleteBooking(Mutation):
             
             # Get seat numbers from tickets before deleting
             seat_numbers = [ticket.seat_number for ticket in booking.tickets]
+            ticket_count = len(booking.tickets)
             
-            # Delete booking (this will cascade delete tickets)
+            print(f"Cancelling booking {booking.id} with {ticket_count} tickets for seats: {seat_numbers}")
+            
+            # Delete booking (this will CASCADE DELETE all associated tickets automatically)
             booking.delete()
             
+            print(f"Booking {id} and its {ticket_count} tickets have been deleted from database")
+            
             # Update seat statuses back to AVAILABLE in cinema service
+            released_seats = []
             for seat_number in seat_numbers:
                 seat_update_query = {
                     'query': '''
@@ -297,7 +325,10 @@ class DeleteBooking(Mutation):
                     
                     if response.ok:
                         response_data = response.json()
-                        if response_data.get('errors'):
+                        if not response_data.get('errors'):
+                            released_seats.append(seat_number)
+                            print(f"Released seat {seat_number} to AVAILABLE")
+                        else:
                             print(f"Error releasing seat {seat_number}: {response_data['errors']}")
                     else:
                         print(f"Failed to release seat {seat_number}: HTTP {response.status_code}")
@@ -307,7 +338,7 @@ class DeleteBooking(Mutation):
             
             return DeleteBookingResponse(
                 success=True,
-                message=f"Booking cancelled successfully. {len(seat_numbers)} seats have been released."
+                message=f"Booking cancelled successfully. {ticket_count} tickets deleted from database and {len(released_seats)} seats released to AVAILABLE."
             )
         except Exception as e:
             traceback.print_exc()
@@ -324,8 +355,8 @@ class CreateTicketsResponse(ObjectType):
 
 class CreateTickets(Mutation):
     class Arguments:
-        bookingId = Int(required=True)  # Changed to camelCase
-        seatNumbers = List(String, required=True)  # Changed to camelCase
+        bookingId = Int(required=True)
+        seatNumbers = List(String, required=True)
 
     Output = CreateTicketsResponse
 
@@ -339,52 +370,64 @@ class CreateTickets(Mutation):
                     message=f"Booking with ID {bookingId} not found"
                 )
 
-            if booking.status != 'PAID':
+            # Allow ticket creation for PENDING bookings (not just PAID)
+            if booking.status not in ['PENDING', 'PAID']:
                 return CreateTicketsResponse(
                     tickets=None,
                     success=False,
-                    message="Tickets can only be created for paid bookings"
+                    message=f"Tickets can only be created for PENDING or PAID bookings, not {booking.status}"
+                )
+
+            # Check if tickets already exist for this booking
+            existing_tickets = Ticket.query.filter(Ticket.booking_id == bookingId).all()
+            if existing_tickets:
+                return CreateTicketsResponse(
+                    tickets=existing_tickets,
+                    success=True,
+                    message=f"Tickets already exist for this booking. Found {len(existing_tickets)} existing tickets."
                 )
 
             tickets = []
             for seat_number in seatNumbers:
                 ticket = Ticket(
-                    booking_id=bookingId,  # Map camelCase to snake_case
+                    booking_id=bookingId,
                     seat_number=seat_number
                 )
                 ticket.save()
                 tickets.append(ticket)
+                print(f"Created ticket ID {ticket.id} for seat {seat_number}")
 
-            # Update seat statuses to BOOKED in cinema service
-            for seat_number in seatNumbers:
-                seat_update_query = {
-                    'query': '''
-                    mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
-                        updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
-                            success
-                            message
+            # Update seat statuses to BOOKED in cinema service if booking is PAID
+            if booking.status == 'PAID':
+                for seat_number in seatNumbers:
+                    seat_update_query = {
+                        'query': '''
+                        mutation($showtimeId: Int!, $seatNumber: String!, $status: String!, $bookingId: Int) {
+                            updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status, bookingId: $bookingId) {
+                                success
+                                message
+                            }
+                        }
+                        ''',
+                        'variables': {
+                            'showtimeId': booking.showtime_id,
+                            'seatNumber': seat_number,
+                            'status': 'BOOKED',
+                            'bookingId': bookingId
                         }
                     }
-                    ''',
-                    'variables': {
-                        'showtimeId': booking.showtime_id,
-                        'seatNumber': seat_number,
-                        'status': 'BOOKED',
-                        'bookingId': bookingId
-                    }
-                }
-                
-                requests.post(
-                    f"{CINEMA_SERVICE_URL}/graphql",
-                    json=seat_update_query,
-                    timeout=30,
-                    headers={'Content-Type': 'application/json'}
-                )
+                    
+                    requests.post(
+                        f"{CINEMA_SERVICE_URL}/graphql",
+                        json=seat_update_query,
+                        timeout=30,
+                        headers={'Content-Type': 'application/json'}
+                    )
 
             return CreateTicketsResponse(
                 tickets=tickets,
                 success=True,
-                message="Tickets created successfully"
+                message=f"Successfully created {len(tickets)} tickets for booking {bookingId}"
             )
         except Exception as e:
             traceback.print_exc()

@@ -2135,28 +2135,78 @@ class CreateBooking(Mutation):
         booking_result = data.get('createBooking', {})
         booking_data = booking_result.get('booking')
         
+        if not booking_result.get('success', False):
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message=booking_result.get('message', 'Booking creation failed')
+            )
+        
+        # Step 6: AUTOMATICALLY create tickets after booking is created
+        if booking_data and booking_data.get('id'):
+            booking_id = booking_data.get('id')
+            print(f"Creating tickets for booking {booking_id} with seats: {seat_numbers}")
+            
+            create_tickets_query = {
+                'query': '''
+                mutation($bookingId: Int!, $seatNumbers: [String!]!) {
+                    createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
+                        tickets {
+                            id
+                            bookingId
+                            seatNumber
+                        }
+                        success
+                        message
+                    }
+                }
+                ''',
+                'variables': {
+                    'bookingId': booking_id,
+                    'seatNumbers': seat_numbers
+                }
+            }
+            
+            tickets_result = make_service_request(SERVICE_URLS['booking'], create_tickets_query, 'booking')
+            print(f"Tickets creation result: {tickets_result}")
+            
+            if tickets_result and not tickets_result.get('errors'):
+                tickets_data = tickets_result.get('data', {}).get('createTickets', {})
+                if tickets_data.get('success'):
+                    tickets = tickets_data.get('tickets', [])
+                    print(f"Successfully created {len(tickets)} tickets")
+                    # Add tickets to booking data
+                    booking_data['tickets'] = tickets
+                else:
+                    print(f"Tickets creation failed: {tickets_data.get('message')}")
+            else:
+                print(f"Tickets creation request failed: {tickets_result}")
+
         # Transform camelCase response to snake_case for gateway BookingType
         if booking_data:
             transformed_booking = {
                 'id': booking_data.get('id'),
-                'user_id': booking_data.get('userId'),  # Transform camelCase to snake_case
-                'showtime_id': booking_data.get('showtimeId'),  # Transform camelCase to snake_case
+                'user_id': booking_data.get('userId'),
+                'showtime_id': booking_data.get('showtimeId'),
                 'status': booking_data.get('status'),
-                'total_price': booking_data.get('totalPrice'),  # Transform camelCase to snake_case
-                'booking_date': booking_data.get('bookingDate'),  # Transform camelCase to snake_case
-                'tickets': booking_data.get('tickets')
+                'total_price': booking_data.get('totalPrice'),
+                'booking_date': booking_data.get('bookingDate'),
+                'tickets': booking_data.get('tickets', [])
             }
+            
+            ticket_count = len(booking_data.get('tickets', []))
+            success_message = f"Booking created successfully! {ticket_count} tickets generated for seats: {', '.join(seat_numbers)}"
             
             return CreateBookingResponse(
                 booking=transformed_booking,
-                success=booking_result.get('success', False),
-                message=booking_result.get('message', 'Booking created successfully')
+                success=True,
+                message=success_message
             )
         
         return CreateBookingResponse(
             booking=None,
-            success=booking_result.get('success', False),
-            message=booking_result.get('message', 'Booking operation completed')
+            success=False,
+            message="Booking created but data not available"
         )
 
 class UpdateBooking(Mutation):
@@ -2833,7 +2883,7 @@ class CreatePayment(Mutation):
         print(f"Payment status update result: {status_update_result}")  # Debug log
 
         # Step 7: AUTOMATICALLY update booking status to 'PAID' (system-driven)
-        print(f"Automatically updating booking {bookingId} status to 'PAID'")  # Debug log
+        print(f"Automatically updating booking {bookingId} status to 'PAID'")
         
         booking_update_query = {
             'query': '''
@@ -2855,7 +2905,16 @@ class CreatePayment(Mutation):
         }
         
         booking_update_result = make_service_request(SERVICE_URLS['booking'], booking_update_query, 'booking')
-        print(f"Booking status update result: {booking_update_result}")  # Debug log
+        print(f"Booking status update result: {booking_update_result}")
+        
+        # Check if booking update was successful
+        if not booking_update_result or booking_update_result.get('errors'):
+            print(f"Failed to update booking status: {booking_update_result}")
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Payment created but failed to update booking status"
+            )
         
         # Step 8: Update seat statuses from RESERVED to BOOKED (tickets already exist)
         if reserved_seats:
@@ -2874,15 +2933,15 @@ class CreatePayment(Mutation):
                     'variables': {
                         'showtimeId': booking_data['showtimeId'],
                         'seatNumber': seat_number,
-                        'status': 'BOOKED',  # Change from RESERVED to BOOKED
+                        'status': 'BOOKED',
                         'bookingId': bookingId
                     }
                 }
                 
                 seat_update_result = make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
                 print(f"Seat {seat_number} status update result: {seat_update_result}")
-                
-        # Step 9: Transform payment data properly with final status
+        
+        # Step 9: Transform payment data with success confirmation
         if payment_service_data:
             transformed_payment = {
                 'id': payment_service_data.get('id'),
@@ -2890,19 +2949,17 @@ class CreatePayment(Mutation):
                 'bookingId': payment_service_data.get('bookingId') or bookingId,
                 'amount': payment_service_data.get('amount') or calculated_amount,
                 'paymentMethod': payment_service_data.get('paymentMethod') or paymentMethod,
-                'status': 'success',  # Set final status to success
+                'status': 'success',
                 'paymentProofImage': payment_service_data.get('paymentProofImage') or paymentProofImage,
                 'createdAt': payment_service_data.get('createdAt'),
                 'updatedAt': payment_service_data.get('updatedAt'),
-                'canBeDeleted': False  # Success payments cannot be deleted
+                'canBeDeleted': False
             }
-            
-            print(f"Final transformed payment: {transformed_payment}")
             
             return CreatePaymentResponse(
                 payment=transformed_payment,
                 success=True,
-                message=f"Payment successful! Amount: {seat_count} seats × ${showtime_price:,.0f} = ${calculated_amount:,.0f}. Payment status: SUCCESS, Booking status: PAID. Tickets created automatically."
+                message=f"Payment successful! Booking confirmed with {len(reserved_seats)} tickets (already generated during booking)."
             )
         else:
             return CreatePaymentResponse(
@@ -2910,7 +2967,7 @@ class CreatePayment(Mutation):
                 success=False,
                 message="Payment processing completed but data not available"
             )
-
+            
 class DeletePayment(Mutation):
     class Arguments:
         id = Int(required=True)

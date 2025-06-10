@@ -1902,114 +1902,44 @@ function showBookingConfirmationModal(booking, selectedSeats, totalPrice) {
                     <div class="success-icon mb-3">
                         <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
                     </div>
-                    <h4 class="text-success">Booking Successfully Created!</h4>
-                    <p class="text-muted">Your seats have been reserved. Please complete payment to confirm your booking.</p>
+                    <h4 class="text-success">Booking & Tickets Created Successfully!</h4>
+                    <p class="text-muted">Your seats have been reserved and tickets generated. Please complete payment to confirm your booking.</p>
+                </div>
+                
+                <!-- Ticket Status Alert -->
+                <div class="alert alert-info">
+                    <i class="fas fa-ticket-alt me-2"></i>
+                    <strong>Tickets Generated:</strong> ${selectedSeats.length} tickets have been automatically created for your selected seats. Complete payment to activate them.
                 </div>
                 
                 <div class="booking-details">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="detail-card mb-3">
-                                <h6 class="detail-header">
-                                    <i class="fas fa-ticket-alt me-2"></i>Booking Details
-                                </h6>
-                                <div class="detail-content">
-                                    <div class="detail-row">
-                                        <span class="label">Booking ID:</span>
-                                        <span class="value">#${booking.id}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="label">Status:</span>
-                                        <span class="value">
-                                            <span class="badge bg-warning text-dark">
-                                                <i class="fas fa-clock me-1"></i>${booking.status || 'PENDING'}
-                                            </span>
-                                        </span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="label">Booking Date:</span>
-                                        <span class="value">${bookingDateDisplay}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="detail-card mb-3">
-                                <h6 class="detail-header">
-                                    <i class="fas fa-film me-2"></i>Movie Details
-                                </h6>
-                                <div class="detail-content">
-                                    <div class="detail-row">
-                                        <span class="label">Movie:</span>
-                                        <span class="value">${showtime.movie?.title || 'Unknown Movie'}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="label">Date & Time:</span>
-                                        <span class="value">${dateDisplay} at ${timeDisplay}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="label">Cinema:</span>
-                                        <span class="value">${showtime.auditorium?.cinema?.name || 'Unknown Cinema'}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="label">Hall:</span>
-                                        <span class="value">${showtime.auditorium?.name || 'Unknown Hall'}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- ... existing booking details ... -->
                     
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="detail-card mb-3">
-                                <h6 class="detail-header">
-                                    <i class="fas fa-chair me-2"></i>Selected Seats
-                                </h6>
-                                <div class="detail-content">
-                                    <div class="seats-display">
-                                        ${selectedSeats.map(seat => `
-                                            <span class="seat-badge">
-                                                <i class="fas fa-chair me-1"></i>${seat}
-                                            </span>
-                                        `).join('')}
-                                    </div>
-                                    <div class="detail-row mt-2">
-                                        <span class="label">Total Seats:</span>
-                                        <span class="value">${selectedSeats.length} seat(s)</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="detail-card mb-3">
-                                <h6 class="detail-header">
-                                    <i class="fas fa-dollar-sign me-2"></i>Payment Summary
-                                </h6>
-                                <div class="detail-content">
-                                    <div class="detail-row">
-                                        <span class="label">Price per seat:</span>
-                                        <span class="value">$${currentShowtimePrice.toFixed(2)}</span>
-                                    </div>
-                                    <div class="detail-row">
-                                        <span class="label">Number of seats:</span>
-                                        <span class="value">${selectedSeats.length}</span>
-                                    </div>
-                                    <div class="detail-row total-row">
-                                        <span class="label"><strong>Total Amount:</strong></span>
-                                        <span class="value total-amount">
-                                            <strong>$${totalPrice.toFixed(2)}</strong>
+                    <div class="col-md-6">
+                        <div class="detail-card mb-3">
+                            <h6 class="detail-header">
+                                <i class="fas fa-ticket-alt me-2"></i>Generated Tickets
+                            </h6>
+                            <div class="detail-content">
+                                <div class="seats-display">
+                                    ${selectedSeats.map(seat => `
+                                        <span class="seat-badge">
+                                            <i class="fas fa-ticket-alt me-1"></i>Ticket for ${seat}
                                         </span>
-                                    </div>
+                                    `).join('')}
+                                </div>
+                                <div class="detail-row mt-2">
+                                    <span class="label">Total Tickets:</span>
+                                    <span class="value">${selectedSeats.length} ticket(s) created</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>Important:</strong> Your seats are reserved for 15 minutes. Please complete payment to confirm your booking.
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Important:</strong> Your tickets are created but in PENDING status. Complete payment within 15 minutes to activate them, or they will be automatically cancelled.
                 </div>
             </div>
         `;

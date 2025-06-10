@@ -771,7 +771,7 @@ function renderBookings() {
 // Render cards view
 function renderCardsView(bookings) {
     elements.loadingContainer.style.display = 'none';
-    elements.bookingsCards.style.display = 'block';
+    elements.bookingsCards.style.display = 'flex';
     elements.bookingsTable.style.display = 'none';
     elements.emptyState.style.display = 'none';
     elements.errorState.style.display = 'none';
