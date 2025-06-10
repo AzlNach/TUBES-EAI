@@ -1,84 +1,174 @@
-/**
- * Admin Authentication Service
- * Handles admin login, token management, and authorization
- */
+// Tambahkan method ini ke object AdminAuth yang sudah ada
 
-class AdminAuthService {
-    constructor() {
-        this.baseURL = '/graphql';
-        this.tokenKey = 'admin_token';
-        this.userKey = 'admin_user';
-        this.init();
-    }
+const AdminAuth = {
+    // ... existing methods ...
 
-    init() {
-        // Check if user is logged in and is admin
-        if (this.isLoggedIn() && !this.isAdmin()) {
-            this.logout();
-            window.location.href = '/admin/login';
-        }
-        
-        // Redirect to login if not authenticated and not on login page
-        if (!this.isLoggedIn() && !window.location.pathname.includes('/admin/login')) {
-            window.location.href = '/admin/login';
-        }
-    }
-
-    // GraphQL request with admin authentication
-    async graphqlRequest(query, variables = {}, requireAuth = true) {
-        const headers = {
-            'Content-Type': 'application/json',
-        };
-
-        if (requireAuth) {
-            const token = this.getToken();
-            if (!token) {
-                throw new Error('No authentication token found');
-            }
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        try {
-            const response = await fetch(this.baseURL, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    query,
-                    variables
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.errors) {
-                console.error('GraphQL errors:', result.errors);
-                
-                // Check for authentication errors
-                const authError = result.errors.find(error => 
-                    error.message.includes('Authentication') || 
-                    error.message.includes('Unauthorized') ||
-                    error.message.includes('Admin access required')
-                );
-
-                if (authError) {
-                    this.logout();
-                    window.location.href = '/admin/login';
-                    return null;
+    // Cinema CRUD operations
+    async getCinemas() {
+        const query = `
+            query GetCinemas {
+                cinemas {
+                    id
+                    name
+                    city
+                    capacity
+                    auditoriums {
+                        id
+                        name
+                        seat_layout
+                    }
                 }
-
-                throw new Error(result.errors[0].message);
             }
-
-            return result;
-        } catch (error) {
-            console.error('Admin GraphQL request failed:', error);
-            throw error;
+        `;
+        
+        const result = await this.graphqlRequest(query, {}, true);
+        if (result && result.data && result.data.cinemas) {
+            return result.data.cinemas;
         }
-    }
+        throw new Error('Failed to fetch cinemas');
+    },
 
-    // Admin login
+    async createCinema(cinemaData) {
+        const mutation = `
+            mutation CreateCinema($name: String!, $city: String!, $capacity: Int!) {
+                createCinema(name: $name, city: $city, capacity: $capacity) {
+                    cinema {
+                        id
+                        name
+                        city
+                        capacity
+                    }
+                    success
+                    message
+                }
+            }
+        `;
+        
+        const result = await this.graphqlRequest(mutation, cinemaData, true);
+        if (result && result.data && result.data.createCinema) {
+            if (result.data.createCinema.success) {
+                return { success: true, data: result.data.createCinema.cinema };
+            } else {
+                throw new Error(result.data.createCinema.message);
+            }
+        }
+        throw new Error('Failed to create cinema');
+    },
+
+    async updateCinema(cinemaId, cinemaData) {
+        const mutation = `
+            mutation UpdateCinema($id: Int!, $name: String, $city: String, $capacity: Int) {
+                updateCinema(id: $id, name: $name, city: $city, capacity: $capacity) {
+                    cinema {
+                        id
+                        name
+                        city
+                        capacity
+                    }
+                    success
+                    message
+                }
+            }
+        `;
+        
+        const variables = { id: cinemaId, ...cinemaData };
+        const result = await this.graphqlRequest(mutation, variables, true);
+        if (result && result.data && result.data.updateCinema) {
+            if (result.data.updateCinema.success) {
+                return { success: true, data: result.data.updateCinema.cinema };
+            } else {
+                throw new Error(result.data.updateCinema.message);
+            }
+        }
+        throw new Error('Failed to update cinema');
+    },
+
+    async deleteCinema(cinemaId) {
+        const mutation = `
+            mutation DeleteCinema($id: Int!) {
+                deleteCinema(id: $id) {
+                    success
+                    message
+                }
+            }
+        `;
+        
+        const result = await this.graphqlRequest(mutation, { id: cinemaId }, true);
+        if (result && result.data && result.data.deleteCinema) {
+            if (result.data.deleteCinema.success) {
+                return { success: true };
+            } else {
+                throw new Error(result.data.deleteCinema.message);
+            }
+        }
+        throw new Error('Failed to delete cinema');
+    },
+
+    // Logout function for admin
+    logout() {
+        try {
+            console.log('Admin logout initiated...');
+            
+            // Clear all authentication data
+            localStorage.removeItem('cinema_auth_token');
+            localStorage.removeItem('cinema_user_data');
+            localStorage.removeItem('admin_session');
+            localStorage.removeItem('rememberMe');
+            
+            // Clear any session storage
+            sessionStorage.clear();
+            
+            // Show logout message
+            this.showMessage('Logged out successfully', 'success');
+            
+            // Redirect to admin login page after a brief delay
+            setTimeout(() => {
+                window.location.href = '/admin/login';
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Force redirect even if there's an error
+            window.location.href = '/admin/login';
+        }
+    },
+
+    // Check if user is logged in
+    isLoggedIn() {
+        const token = localStorage.getItem('cinema_auth_token');
+        const userData = localStorage.getItem('cinema_user_data');
+        return !!(token && userData);
+    },
+
+    // Check if current user is admin
+    isAdmin() {
+        try {
+            const userData = localStorage.getItem('cinema_user_data');
+            if (userData) {
+                const user = JSON.parse(userData);
+                return user.role === 'ADMIN';
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking admin status:', error);
+            return false;
+        }
+    },
+
+    // Get current user data
+    getCurrentUser() {
+        try {
+            const userData = localStorage.getItem('cinema_user_data');
+            return userData ? JSON.parse(userData) : null;
+        } catch (error) {
+            console.error('Error getting current user:', error);
+            return null;
+        }
+    },
+
+    // Admin login function
     async login(email, password) {
-        const loginQuery = `
+        const query = `
             mutation AdminLogin($email: String!, $password: String!) {
                 login(email: $email, password: $password) {
                     success
@@ -95,496 +185,141 @@ class AdminAuthService {
         `;
 
         try {
-            const result = await this.graphqlRequest(loginQuery, { email, password }, false);
+            const result = await this.graphqlRequest(query, { email, password });
             
-            if (result.data.login.success) {
-                const { token, user } = result.data.login;
+            if (result && result.data && result.data.login) {
+                const loginData = result.data.login;
                 
-                // Check if user is admin
-                if (user.role !== 'admin') {
-                    throw new Error('Admin access required');
+                if (loginData.success && loginData.user.role === 'ADMIN') {
+                    // Store auth data
+                    localStorage.setItem('cinema_auth_token', loginData.token);
+                    localStorage.setItem('cinema_user_data', JSON.stringify(loginData.user));
+                    localStorage.setItem('admin_session', 'true');
+                    
+                    return loginData;
+                } else if (loginData.user.role !== 'ADMIN') {
+                    throw new Error('Access denied. Admin privileges required.');
+                } else {
+                    throw new Error(loginData.message || 'Login failed');
                 }
-                
-                this.setToken(token);
-                this.setUser(user);
-                
-                return {
-                    success: true,
-                    user: user
-                };
-            } else {
-                throw new Error(result.data.login.message || 'Login failed');
             }
+            
+            throw new Error('Invalid response from server');
+            
         } catch (error) {
             console.error('Admin login error:', error);
             throw error;
         }
-    }
+    },
 
-    // Logout
-    logout() {
-        localStorage.removeItem(this.tokenKey);
-        localStorage.removeItem(this.userKey);
-        window.location.href = '/admin/login';
-    }
-
-    // Token management
-    setToken(token) {
-        localStorage.setItem(this.tokenKey, token);
-    }
-
-    getToken() {
-        return localStorage.getItem(this.tokenKey);
-    }
-
-    // User management
-    setUser(user) {
-        localStorage.setItem(this.userKey, JSON.stringify(user));
-    }
-
-    getUser() {
-        const user = localStorage.getItem(this.userKey);
-        return user ? JSON.parse(user) : null;
-    }
-
-    // Authentication checks
-    isLoggedIn() {
-        const token = this.getToken();
-        const user = this.getUser();
-        return !!(token && user);
-    }
-
-    isAdmin() {
-        const user = this.getUser();
-        return user && user.role === 'admin';
-    }
-
-    // Get admin movies (with full access)
-    async getMovies() {
-        const query = `
-            query GetAdminMovies {
-                movies {
-                    id
-                    title
-                    genre
-                    duration
-                    description
-                    releaseDate
-                    posterUrl
-                    rating
-                }
-            }
-        `;
-
-        try {
-            const result = await this.graphqlRequest(query);
-            return result.data.movies || [];
-        } catch (error) {
-            console.error('Error fetching admin movies:', error);
-            throw error;
-        }
-    }
-
-    // Get admin cinemas (with full access)
-    async getCinemas() {
-        const query = `
-            query GetAdminCinemas {
-                cinemas {
-                    id
-                    name
-                    city
-                    capacity
-                    auditoriums {
-                        id
-                        name
-                        seat_layout
-                    }
-                }
-            }
-        `;
-
-        try {
-            const result = await this.graphqlRequest(query);
-            return result.data.cinemas || [];
-        } catch (error) {
-            console.error('Error fetching admin cinemas:', error);
-            throw error;
-        }
-    }
-
-        // Tambahkan method ini ke AdminAuthService class
-    
-    // Delete cinema
-    async deleteCinema(id) {
-        const mutation = `
-            mutation DeleteCinema($id: Int!) {
-                deleteCinema(id: $id) {
-                    success
-                    message
-                }
-            }
-        `;
-    
-        try {
-            const result = await this.graphqlRequest(mutation, { id });
-            return result.data.deleteCinema;
-        } catch (error) {
-            console.error('Error deleting cinema:', error);
-            throw error;
-        }
-    }
-    
-    // Update cinema
-    async updateCinema(id, cinemaData) {
-        const mutation = `
-            mutation UpdateCinema(
-                $id: Int!
-                $name: String
-                $city: String
-                $capacity: Int
-            ) {
-                updateCinema(
-                    id: $id
-                    name: $name
-                    city: $city
-                    capacity: $capacity
-                ) {
-                    cinema {
-                        id
-                        name
-                        city
-                        capacity
-                    }
-                    success
-                    message
-                }
-            }
-        `;
-    
-        try {
-            const result = await this.graphqlRequest(mutation, { id, ...cinemaData });
-            return result.data.updateCinema;
-        } catch (error) {
-            console.error('Error updating cinema:', error);
-            throw error;
-        }
-    }
-    
-    // Update booking status
-    async updateBookingStatus(bookingId, status) {
-        const mutation = `
-            mutation UpdateBooking(
-                $id: Int!
-                $status: String!
-            ) {
-                updateBooking(
-                    id: $id
-                    status: $status
-                ) {
-                    booking {
-                        id
-                        status
-                    }
-                    success
-                    message
-                }
-            }
-        `;
-    
-        try {
-            const result = await this.graphqlRequest(mutation, { 
-                id: bookingId, 
-                status: status 
-            });
-            return result.data.updateBooking;
-        } catch (error) {
-            console.error('Error updating booking:', error);
-            throw error;
-        }
-    }
-
-    // Get admin users
+    // Get all users (admin only)
     async getUsers() {
         const query = `
-            query GetUsers {
+            query GetAllUsers {
                 users {
                     id
                     username
                     email
                     role
+                    createdAt
                 }
             }
         `;
-
+        
         try {
-            const result = await this.graphqlRequest(query);
-            return result.data.users || [];
+            const result = await this.graphqlRequest(query, {}, true);
+            if (result && result.data && result.data.users) {
+                return result.data.users;
+            }
+            throw new Error('No users data received');
         } catch (error) {
             console.error('Error fetching users:', error);
             throw error;
         }
-    }
+    },
 
-    // Get admin bookings
-    async getBookings() {
-        const query = `
-            query GetAllBookings {
-                allBookings {
-                    id
-                    user_id
-                    movie_id
-                    auditorium_id
-                    showtime_id
-                    seat_numbers
-                    total_price
-                    status
-                    booking_time
-                    movie {
-                        title
-                    }
-                    auditorium {
-                        name
-                        cinema {
-                            name
-                        }
-                    }
-                }
+    // Helper method untuk GraphQL requests
+    async graphqlRequest(query, variables = {}, requireAuth = false) {
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+
+        if (requireAuth) {
+            const token = localStorage.getItem('cinema_auth_token');
+            if (!token) {
+                throw new Error('Authentication required');
             }
-        `;
+            headers['Authorization'] = `Bearer ${token}`;
+        }
 
         try {
-            const result = await this.graphqlRequest(query);
-            return result.data.allBookings || [];
-        } catch (error) {
-            console.error('Error fetching bookings:', error);
-            throw error;
-        }
-    }
+            const response = await fetch('/graphql', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    query: query,
+                    variables: variables
+                })
+            });
 
-    // Create movie
-    async createMovie(movieData) {
-        const mutation = `
-            mutation CreateMovie(
-                $title: String!
-                $genre: String!
-                $duration: Int!
-                $description: String
-                $releaseDate: String
-                $posterUrl: String
-                $rating: Float
-            ) {
-                createMovie(
-                    title: $title
-                    genre: $genre
-                    duration: $duration
-                    description: $description
-                    releaseDate: $releaseDate
-                    posterUrl: $posterUrl
-                    rating: $rating
-                ) {
-                    movie {
-                        id
-                        title
-                        genre
-                        duration
-                        description
-                        releaseDate
-                        posterUrl
-                        rating
-                    }
-                    success
-                    message
-                }
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        `;
 
-        try {
-            const result = await this.graphqlRequest(mutation, movieData);
-            return result.data.createMovie;
-        } catch (error) {
-            console.error('Error creating movie:', error);
-            throw error;
-        }
-    }
-
-    // Update movie
-    async updateMovie(id, movieData) {
-        const mutation = `
-            mutation UpdateMovie(
-                $id: Int!
-                $title: String
-                $genre: String
-                $duration: Int
-                $description: String
-                $releaseDate: String
-                $posterUrl: String
-                $rating: Float
-            ) {
-                updateMovie(
-                    id: $id
-                    title: $title
-                    genre: $genre
-                    duration: $duration
-                    description: $description
-                    releaseDate: $releaseDate
-                    posterUrl: $posterUrl
-                    rating: $rating
-                ) {
-                    movie {
-                        id
-                        title
-                        genre
-                        duration
-                        description
-                        releaseDate
-                        posterUrl
-                        rating
-                    }
-                    success
-                    message
-                }
+            const result = await response.json();
+            
+            if (result.errors) {
+                throw new Error(result.errors[0].message);
             }
-        `;
 
-        try {
-            const result = await this.graphqlRequest(mutation, { id, ...movieData });
-            return result.data.updateMovie;
+            return result;
         } catch (error) {
-            console.error('Error updating movie:', error);
+            console.error('GraphQL request failed:', error);
             throw error;
         }
-    }
+    },
 
-    // Delete movie
-    async deleteMovie(id) {
-        const mutation = `
-            mutation DeleteMovie($id: Int!) {
-                deleteMovie(id: $id) {
-                    success
-                    message
-                }
-            }
-        `;
-
-        try {
-            const result = await this.graphqlRequest(mutation, { id });
-            return result.data.deleteMovie;
-        } catch (error) {
-            console.error('Error deleting movie:', error);
-            throw error;
-        }
-    }
-
-    // Create cinema
-    async createCinema(cinemaData) {
-        const mutation = `
-            mutation CreateCinema(
-                $name: String!
-                $city: String!
-                $capacity: Int!
-            ) {
-                createCinema(
-                    name: $name
-                    city: $city
-                    capacity: $capacity
-                ) {
-                    cinema {
-                        id
-                        name
-                        city
-                        capacity
-                    }
-                    success
-                    message
-                }
-            }
-        `;
-
-        try {
-            const result = await this.graphqlRequest(mutation, cinemaData);
-            return result.data.createCinema;
-        } catch (error) {
-            console.error('Error creating cinema:', error);
-            throw error;
-        }
-    }
-
-    // Show admin message
+    // Show message helper
     showMessage(message, type = 'info') {
-        // Create toast notification
-        const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type} border-0`;
-        toast.setAttribute('role', 'alert');
-        toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
+        // Create or update message element
+        let messageElement = document.getElementById('admin-message');
+        if (!messageElement) {
+            messageElement = document.createElement('div');
+            messageElement.id = 'admin-message';
+            messageElement.className = 'alert alert-dismissible fade show position-fixed';
+            messageElement.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            document.body.appendChild(messageElement);
+        }
+
+        // Map type to Bootstrap classes
+        const typeClass = {
+            'success': 'alert-success',
+            'error': 'alert-danger',
+            'warning': 'alert-warning',
+            'info': 'alert-info'
+        }[type] || 'alert-info';
+
+        messageElement.className = `alert ${typeClass} alert-dismissible fade show position-fixed`;
+        messageElement.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
 
-        // Add to page
-        let toastContainer = document.querySelector('.toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-            document.body.appendChild(toastContainer);
-        }
-        
-        toastContainer.appendChild(toast);
-        
-        // Show toast
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
-        
-        // Remove after hide
-        toast.addEventListener('hidden.bs.toast', () => {
-            toast.remove();
-        });
+        // Auto hide after 5 seconds
+        setTimeout(() => {
+            if (messageElement && messageElement.parentNode) {
+                messageElement.remove();
+            }
+        }, 5000);
     }
-}
+};
 
-// Initialize admin auth service
-const AdminAuth = new AdminAuthService();
+// Make logout function available globally
+window.logout = function() {
+    AdminAuth.logout();
+};
 
-// Global functions
-window.logout = () => AdminAuth.logout();
+// Also make AdminAuth available globally
+window.AdminAuth = AdminAuth;
 
-// Sidebar toggle functionality
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebar = document.getElementById('sidebar');
-    const toggleBtn = document.getElementById('toggleSidebar');
-    const closeBtn = document.getElementById('closeSidebar');
-
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('show');
-        });
-    }
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            sidebar.classList.remove('show');
-        });
-    }
-
-    // Close sidebar when clicking outside on mobile
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768 && 
-            !sidebar.contains(e.target) && 
-            !toggleBtn?.contains(e.target)) {
-            sidebar.classList.remove('show');
-        }
-    });
-
-    // Update admin name in UI
-    const user = AdminAuth.getUser();
-    if (user) {
-        const adminNameElements = document.querySelectorAll('.admin-name');
-        adminNameElements.forEach(el => {
-            el.textContent = user.username || 'Admin';
-        });
-    }
-});
+console.log('Admin authentication module loaded');

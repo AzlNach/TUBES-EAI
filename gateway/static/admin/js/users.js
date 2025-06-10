@@ -12,10 +12,18 @@ let elements = {};
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Users page initializing...');
     initializePage();
 });
 
 function initializePage() {
+    // Check admin authentication
+    if (!AdminAuth.isLoggedIn() || !AdminAuth.isAdmin()) {
+        console.warn('Admin access required, redirecting...');
+        window.location.href = '/admin/login';
+        return;
+    }
+
     // Cache DOM elements
     cacheElements();
     
@@ -47,6 +55,8 @@ function cacheElements() {
         regularUsersCount: document.getElementById('regular-users-count'),
         newUsersToday: document.getElementById('new-users-today')
     };
+
+    console.log('DOM elements cached:', elements);
 }
 
 function setupEventListeners() {
@@ -67,16 +77,19 @@ function setupEventListeners() {
 // Load users from API
 async function loadUsers() {
     try {
+        console.log('Loading users...');
         showLoadingState();
         
-        console.log('Loading users for admin...');
         const users = await AdminAuth.getUsers();
+        console.log('Users loaded from API:', users);
         
         if (users && users.length > 0) {
             allUsers = users;
             updateStats(users);
             applyFilters();
+            console.log(`Successfully loaded ${users.length} users`);
         } else {
+            console.warn('No users received');
             allUsers = [];
             showEmptyState();
         }
@@ -84,11 +97,14 @@ async function loadUsers() {
     } catch (error) {
         console.error('Error loading users:', error);
         showErrorState('Failed to load users. Please try again.');
+        AdminAuth.showMessage('Failed to load users: ' + error.message, 'error');
     }
 }
 
 // Update statistics
 function updateStats(users) {
+    console.log('Updating stats for users:', users);
+    
     const totalUsers = users.length;
     const adminUsers = users.filter(user => user.role === 'ADMIN').length;
     const regularUsers = users.filter(user => user.role === 'USER').length;
@@ -111,6 +127,8 @@ function updateStats(users) {
     if (elements.newUsersToday) {
         animateNumber(elements.newUsersToday, newToday);
     }
+
+    console.log('Stats updated:', { totalUsers, adminUsers, regularUsers, newToday });
 }
 
 // Apply filters and render
@@ -128,11 +146,14 @@ function applyFilters() {
         return matchesSearch && matchesRole;
     });
     
+    console.log('Filtered users:', filteredUsers);
     renderUsers(filteredUsers);
 }
 
 // Render users table
 function renderUsers(users) {
+    console.log('Rendering users:', users);
+    
     if (!users || users.length === 0) {
         showEmptyState();
         return;
@@ -153,8 +174,10 @@ function renderUsers(users) {
 function createUserRow(user) {
     const row = document.createElement('tr');
     
-    // Format join date (demo data)
-    const joinDate = new Date().toLocaleDateString(); // Demo: use current date
+    // Format join date - use createdAt if available
+    const joinDate = user.createdAt ? 
+        new Date(user.createdAt).toLocaleDateString() : 
+        new Date().toLocaleDateString(); // fallback
     
     // Role badge styling
     const roleBadgeClass = user.role === 'ADMIN' ? 'bg-danger' : 'bg-primary';
@@ -214,20 +237,24 @@ function clearSearch() {
 function viewUser(userId) {
     const user = allUsers.find(u => u.id === userId);
     if (user) {
-        alert(`User Details:\n\nID: ${user.id}\nUsername: ${user.username}\nEmail: ${user.email}\nRole: ${user.role}`);
+        const joinDate = user.createdAt ? 
+            new Date(user.createdAt).toLocaleDateString() : 
+            'Unknown';
+            
+        alert(`User Details:\n\nID: ${user.id}\nUsername: ${user.username}\nEmail: ${user.email}\nRole: ${user.role}\nJoined: ${joinDate}`);
     }
 }
 
 // Edit user
 function editUser(userId) {
-    AdminAuth.showMessage('User editing functionality not implemented yet', 'info');
+    AdminAuth.showMessage('User editing functionality will be implemented soon', 'info');
 }
 
 // Delete user
 function deleteUser(userId) {
     const user = allUsers.find(u => u.id === userId);
     if (user && confirm(`Are you sure you want to delete user "${user.username}"? This action cannot be undone.`)) {
-        AdminAuth.showMessage('User deletion functionality not implemented yet', 'warning');
+        AdminAuth.showMessage('User deletion functionality will be implemented soon', 'warning');
     }
 }
 
@@ -256,25 +283,33 @@ function animateNumber(element, targetNumber, duration = 1000) {
 // State management functions
 function showLoadingState() {
     hideAllStates();
-    elements.loadingContainer.style.display = 'block';
+    if (elements.loadingContainer) {
+        elements.loadingContainer.style.display = 'block';
+    }
 }
 
 function showEmptyState() {
     hideAllStates();
-    elements.emptyState.style.display = 'block';
+    if (elements.emptyState) {
+        elements.emptyState.style.display = 'block';
+    }
 }
 
 function showErrorState(message) {
     hideAllStates();
-    elements.errorMessage.textContent = message;
-    elements.errorState.style.display = 'block';
+    if (elements.errorMessage) {
+        elements.errorMessage.textContent = message;
+    }
+    if (elements.errorState) {
+        elements.errorState.style.display = 'block';
+    }
 }
 
 function hideAllStates() {
-    elements.loadingContainer.style.display = 'none';
-    elements.usersTableContainer.style.display = 'none';
-    elements.emptyState.style.display = 'none';
-    elements.errorState.style.display = 'none';
+    if (elements.loadingContainer) elements.loadingContainer.style.display = 'none';
+    if (elements.usersTableContainer) elements.usersTableContainer.style.display = 'none';
+    if (elements.emptyState) elements.emptyState.style.display = 'none';
+    if (elements.errorState) elements.errorState.style.display = 'none';
 }
 
 // Utility function

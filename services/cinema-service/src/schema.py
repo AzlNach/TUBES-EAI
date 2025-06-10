@@ -118,70 +118,113 @@ class DeleteResponse(ObjectType):
 class CreateCinema(Mutation):
     class Arguments:
         name = String(required=True)
-        city = String(required=True)  # Changed from location to city
+        city = String(required=True)
         capacity = Int()
 
     Output = CreateCinemaResponse
 
-    def mutate(self, info, name, city, capacity=100):
-        try:
-            new_cinema = Cinema(name=name, city=city, capacity=capacity)
-            new_cinema.save()
-            return CreateCinemaResponse(
-                cinema=new_cinema, 
-                success=True, 
-                message="Cinema created successfully"
-            )
-        except Exception as e:
-            traceback.print_exc()
-            db.session.rollback()
-            return CreateCinemaResponse(
-                cinema=None, 
-                success=False, 
-                message=f"Error creating cinema: {str(e)}"
-            )
+    @require_admin
+    def mutate(self, info, current_user, name, city, capacity=100):
+        # Forward request ke cinema service
+        mutation_query = {
+            'query': '''
+                mutation CreateCinema($name: String!, $city: String!, $capacity: Int!) {
+                    createCinema(name: $name, city: $city, capacity: $capacity) {
+                        cinema {
+                            id
+                            name
+                            city
+                            capacity
+                        }
+                        success
+                        message
+                    }
+                }
+            ''',
+            'variables': {'name': name, 'city': city, 'capacity': capacity}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], mutation_query, 'cinema')
+        
+        if result and not result.get('errors'):
+            create_result = result.get('data', {}).get('createCinema', {})
+            
+            if create_result.get('success'):
+                cinema_data = create_result.get('cinema', {})
+                transformed_cinema = {
+                    'id': cinema_data.get('id'),
+                    'name': cinema_data.get('name'),
+                    'city': cinema_data.get('city'),
+                    'capacity': cinema_data.get('capacity')
+                }
+                
+                return CreateCinemaResponse(
+                    cinema=transformed_cinema,
+                    success=True,
+                    message=create_result.get('message', 'Cinema created successfully')
+                )
+        
+        return CreateCinemaResponse(
+            cinema=None,
+            success=False,
+            message='Failed to create cinema'
+        )
 
 class UpdateCinema(Mutation):
     class Arguments:
         id = Int(required=True)
         name = String()
-        city = String()  # Changed from location to city
+        city = String()
         capacity = Int()
 
     Output = CreateCinemaResponse
 
-    def mutate(self, info, id, name=None, city=None, capacity=None):
-        try:
-            cinema = Cinema.query.get(id)
-            if not cinema:
-                return CreateCinemaResponse(
-                    cinema=None,
-                    success=False,
-                    message=f"Cinema with ID {id} not found"
-                )
-                
-            if name:
-                cinema.name = name
-            if city:
-                cinema.city = city
-            if capacity:
-                cinema.capacity = capacity
-                
-            cinema.save()
+    @require_admin
+    def mutate(self, info, current_user, id, name=None, city=None, capacity=None):
+        # Forward request ke cinema service
+        mutation_query = {
+            'query': '''
+                mutation UpdateCinema($id: Int!, $name: String, $city: String, $capacity: Int) {
+                    updateCinema(id: $id, name: $name, city: $city, capacity: $capacity) {
+                        cinema {
+                            id
+                            name
+                            city
+                            capacity
+                        }
+                        success
+                        message
+                    }
+                }
+            ''',
+            'variables': {'id': id, 'name': name, 'city': city, 'capacity': capacity}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], mutation_query, 'cinema')
+        
+        if result and not result.get('errors'):
+            update_result = result.get('data', {}).get('updateCinema', {})
             
-            return CreateCinemaResponse(
-                cinema=cinema,
-                success=True,
-                message="Cinema updated successfully"
-            )
-        except Exception as e:
-            db.session.rollback()
-            traceback.print_exc()
-            return CreateCinemaResponse(
-                cinema=None,
-                success=False,
-                message=f"Error updating cinema: {str(e)}"
-            )
+            if update_result.get('success'):
+                cinema_data = update_result.get('cinema', {})
+                transformed_cinema = {
+                    'id': cinema_data.get('id'),
+                    'name': cinema_data.get('name'),
+                    'city': cinema_data.get('city'),
+                    'capacity': cinema_data.get('capacity')
+                }
+                
+                return CreateCinemaResponse(
+                    cinema=transformed_cinema,
+                    success=True,
+                    message=update_result.get('message', 'Cinema updated successfully')
+                )
+        
+        return CreateCinemaResponse(
+            cinema=None,
+            success=False,
+            message='Failed to update cinema'
+        )
 
 class DeleteCinema(Mutation):
     class Arguments:
@@ -189,18 +232,35 @@ class DeleteCinema(Mutation):
 
     Output = DeleteResponse
 
-    def mutate(self, info, id):
-        try:
-            cinema = Cinema.query.get(id)
-            if not cinema:
-                return DeleteResponse(success=False, message="Cinema not found")
-                
-            cinema.delete()
-            return DeleteResponse(success=True, message="Cinema deleted successfully")
-        except Exception as e:
-            db.session.rollback()
-            traceback.print_exc()
-            return DeleteResponse(success=False, message=f"Error deleting cinema: {str(e)}")
+    @require_admin
+    def mutate(self, info, current_user, id):
+        # Forward request ke cinema service
+        mutation_query = {
+            'query': '''
+                mutation DeleteCinema($id: Int!) {
+                    deleteCinema(id: $id) {
+                        success
+                        message
+                    }
+                }
+            ''',
+            'variables': {'id': id}
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], mutation_query, 'cinema')
+        
+        if result and not result.get('errors'):
+            delete_result = result.get('data', {}).get('deleteCinema', {})
+            
+            return DeleteResponse(
+                success=delete_result.get('success', False),
+                message=delete_result.get('message', 'Cinema deletion completed')
+            )
+        
+        return DeleteResponse(
+            success=False,
+            message='Failed to delete cinema'
+        )
 
 # Auditorium Mutations
 class CreateAuditorium(Mutation):
