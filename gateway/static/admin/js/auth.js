@@ -1,7 +1,7 @@
 // Tambahkan method ini ke object AdminAuth yang sudah ada
 
 const AdminAuth = {
-    // ... existing methods ...
+    // ...existing methods...
 
     // Cinema CRUD operations
     async getCinemas() {
@@ -32,41 +32,37 @@ const AdminAuth = {
         const mutation = `
             mutation CreateCinema($name: String!, $city: String!, $capacity: Int!) {
                 createCinema(name: $name, city: $city, capacity: $capacity) {
+                    success
+                    message
                     cinema {
                         id
                         name
                         city
                         capacity
                     }
-                    success
-                    message
                 }
             }
         `;
         
         const result = await this.graphqlRequest(mutation, cinemaData, true);
         if (result && result.data && result.data.createCinema) {
-            if (result.data.createCinema.success) {
-                return { success: true, data: result.data.createCinema.cinema };
-            } else {
-                throw new Error(result.data.createCinema.message);
-            }
+            return result.data.createCinema;
         }
         throw new Error('Failed to create cinema');
     },
 
     async updateCinema(cinemaId, cinemaData) {
         const mutation = `
-            mutation UpdateCinema($id: Int!, $name: String, $city: String, $capacity: Int) {
+            mutation UpdateCinema($id: Int!, $name: String!, $city: String!, $capacity: Int!) {
                 updateCinema(id: $id, name: $name, city: $city, capacity: $capacity) {
+                    success
+                    message
                     cinema {
                         id
                         name
                         city
                         capacity
                     }
-                    success
-                    message
                 }
             }
         `;
@@ -74,11 +70,7 @@ const AdminAuth = {
         const variables = { id: cinemaId, ...cinemaData };
         const result = await this.graphqlRequest(mutation, variables, true);
         if (result && result.data && result.data.updateCinema) {
-            if (result.data.updateCinema.success) {
-                return { success: true, data: result.data.updateCinema.cinema };
-            } else {
-                throw new Error(result.data.updateCinema.message);
-            }
+            return result.data.updateCinema;
         }
         throw new Error('Failed to update cinema');
     },
@@ -95,13 +87,207 @@ const AdminAuth = {
         
         const result = await this.graphqlRequest(mutation, { id: cinemaId }, true);
         if (result && result.data && result.data.deleteCinema) {
-            if (result.data.deleteCinema.success) {
-                return { success: true };
-            } else {
-                throw new Error(result.data.deleteCinema.message);
-            }
+            return result.data.deleteCinema;
         }
         throw new Error('Failed to delete cinema');
+    },
+
+    // Auditorium CRUD operations
+    async createAuditorium(auditoriumData) {
+        const mutation = `
+            mutation CreateAuditorium($cinema_id: Int!, $name: String!, $seat_layout: JSONString) {
+                createAuditorium(cinema_id: $cinema_id, name: $name, seat_layout: $seat_layout) {
+                    success
+                    message
+                    auditorium {
+                        id
+                        cinema_id
+                        name
+                        seat_layout
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                }
+            }
+        `;
+        
+        const result = await this.graphqlRequest(mutation, auditoriumData, true);
+        if (result && result.data && result.data.createAuditorium) {
+            return result.data.createAuditorium;
+        }
+        throw new Error('Failed to create auditorium');
+    },
+
+    async updateAuditorium(auditoriumId, auditoriumData) {
+        const mutation = `
+            mutation UpdateAuditorium($id: Int!, $cinema_id: Int, $name: String, $seat_layout: JSONString) {
+                updateAuditorium(id: $id, cinema_id: $cinema_id, name: $name, seat_layout: $seat_layout) {
+                    success
+                    message
+                    auditorium {
+                        id
+                        cinema_id
+                        name
+                        seat_layout
+                        cinema {
+                            id
+                            name
+                            city
+                        }
+                    }
+                }
+            }
+        `;
+        
+        const variables = { id: auditoriumId, ...auditoriumData };
+        const result = await this.graphqlRequest(mutation, variables, true);
+        if (result && result.data && result.data.updateAuditorium) {
+            return result.data.updateAuditorium;
+        }
+        throw new Error('Failed to update auditorium');
+    },
+
+    async deleteAuditorium(auditoriumId) {
+        const mutation = `
+            mutation DeleteAuditorium($id: Int!) {
+                deleteAuditorium(id: $id) {
+                    success
+                    message
+                }
+            }
+        `;
+        
+        const result = await this.graphqlRequest(mutation, { id: auditoriumId }, true);
+        if (result && result.data && result.data.deleteAuditorium) {
+            return result.data.deleteAuditorium;
+        }
+        throw new Error('Failed to delete auditorium');
+    },
+
+    // Showtime CRUD operations
+    async createShowtime(showtimeData) {
+        const mutation = `
+            mutation CreateShowtime($movieId: Int!, $auditoriumId: Int!, $startTime: String!, $price: Float!) {
+                createShowtime(movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
+                    success
+                    message
+                    showtime {
+                        id
+                        movie_id
+                        auditorium_id
+                        start_time
+                        price
+                        auditorium {
+                            id
+                            name
+                            cinema {
+                                id
+                                name
+                                city
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+        
+        // Convert snake_case to camelCase for GraphQL
+        const variables = {
+            movieId: showtimeData.movie_id,
+            auditoriumId: showtimeData.auditorium_id,
+            startTime: showtimeData.start_time,
+            price: showtimeData.price
+        };
+        
+        const result = await this.graphqlRequest(mutation, variables, true);
+        if (result && result.data && result.data.createShowtime) {
+            return result.data.createShowtime;
+        }
+        throw new Error('Failed to create showtime');
+    },
+
+    async updateShowtime(showtimeId, showtimeData) {
+        const mutation = `
+            mutation UpdateShowtime($id: Int!, $movieId: Int, $auditoriumId: Int, $startTime: String, $price: Float) {
+                updateShowtime(id: $id, movieId: $movieId, auditoriumId: $auditoriumId, startTime: $startTime, price: $price) {
+                    success
+                    message
+                    showtime {
+                        id
+                        movie_id
+                        auditorium_id
+                        start_time
+                        price
+                        auditorium {
+                            id
+                            name
+                            cinema {
+                                id
+                                name
+                                city
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+        
+        // Convert snake_case to camelCase for GraphQL
+        const variables = {
+            id: showtimeId,
+            movieId: showtimeData.movie_id,
+            auditoriumId: showtimeData.auditorium_id,
+            startTime: showtimeData.start_time,
+            price: showtimeData.price
+        };
+        
+        const result = await this.graphqlRequest(mutation, variables, true);
+        if (result && result.data && result.data.updateShowtime) {
+            return result.data.updateShowtime;
+        }
+        throw new Error('Failed to update showtime');
+    },
+
+    async deleteShowtime(showtimeId) {
+        const mutation = `
+            mutation DeleteShowtime($id: Int!) {
+                deleteShowtime(id: $id) {
+                    success
+                    message
+                }
+            }
+        `;
+        
+        const result = await this.graphqlRequest(mutation, { id: showtimeId }, true);
+        if (result && result.data && result.data.deleteShowtime) {
+            return result.data.deleteShowtime;
+        }
+        throw new Error('Failed to delete showtime');
+    },
+
+    // Get movies for showtime creation
+    async getMovies() {
+        const query = `
+            query GetMovies {
+                movies {
+                    id
+                    title
+                    genre
+                    duration
+                    description
+                    releaseDate
+                }
+            }
+        `;
+        
+        const result = await this.graphqlRequest(query, {}, true);
+        if (result && result.data && result.data.movies) {
+            return result.data.movies;
+        }
+        throw new Error('Failed to fetch movies');
     },
 
     // Logout function for admin
@@ -221,7 +407,6 @@ const AdminAuth = {
                     username
                     email
                     role
-                    createdAt
                 }
             }
         `;
@@ -240,43 +425,59 @@ const AdminAuth = {
 
     // Helper method untuk GraphQL requests
     async graphqlRequest(query, variables = {}, requireAuth = false) {
-        const headers = {
-            'Content-Type': 'application/json',
-        };
+    console.log('=== GraphQL Request Debug ===');
+    console.log('Query:', query);
+    console.log('Variables:', variables);
+    console.log('Require Auth:', requireAuth);
+    
+    const headers = {
+        'Content-Type': 'application/json',
+    };
 
-        if (requireAuth) {
-            const token = localStorage.getItem('cinema_auth_token');
-            if (!token) {
-                throw new Error('Authentication required');
-            }
-            headers['Authorization'] = `Bearer ${token}`;
+    if (requireAuth) {
+        const token = localStorage.getItem('cinema_auth_token');
+        console.log('Auth token exists:', !!token);
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    try {
+        console.log('Request headers:', headers);
+        
+        const response = await fetch('/graphql', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                query: query,
+                variables: variables
+            })
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+
+        const responseText = await response.text();
+        console.log('Raw response:', responseText);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}, response: ${responseText}`);
         }
 
-        try {
-            const response = await fetch('/graphql', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({
-                    query: query,
-                    variables: variables
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            
-            if (result.errors) {
-                throw new Error(result.errors[0].message);
-            }
-
-            return result;
-        } catch (error) {
-            console.error('GraphQL request failed:', error);
-            throw error;
+        const result = JSON.parse(responseText);
+        console.log('Parsed result:', result);
+        
+        if (result.errors) {
+            console.error('GraphQL errors:', result.errors);
+            throw new Error(result.errors[0].message);
         }
+
+        return result;
+    } catch (error) {
+        console.error('GraphQL request failed:', error);
+        throw error;
+    }
     },
 
     // Show message helper
