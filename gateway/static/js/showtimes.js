@@ -63,6 +63,20 @@ const SHOWTIME_QUERIES = {
             }
         }
     `,
+    GET_AUDITORIUM_LAYOUT: `
+        query GetAuditoriumLayout($auditoriumId: Int!) {
+            auditorium(id: $auditoriumId) {
+                id
+                name
+                seatLayout
+                cinema {
+                    id
+                    name
+                    city
+                }
+            }
+        }
+    `,
     GET_MOVIES: `
         query GetMovies {
             publicMovies {
@@ -183,7 +197,18 @@ function cacheElements() {
         
         // Error handling
         errorMessage: document.getElementById('error-message'),
-        retryLoadBtn: document.getElementById('retry-load')
+        retryLoadBtn: document.getElementById('retry-load'),
+
+        // Booking confirmation modal
+        bookingConfirmationModal: document.getElementById('bookingConfirmationModal'),
+        modalBookingContent: document.getElementById('modal-booking-content'),
+        proceedPaymentBtn: document.getElementById('proceed-payment-btn'),
+        viewBookingsBtn: document.getElementById('view-bookings-btn'),
+        
+        // Payment modal
+        paymentModal: document.getElementById('paymentModal'),
+        modalPaymentContent: document.getElementById('modal-payment-content'),
+        completePaymentBtn: document.getElementById('complete-payment-btn'),
     };
 }
 
@@ -239,6 +264,9 @@ function setupEventListeners() {
     elements.bookSeatsBtn.addEventListener('click', handleBookSeats);
     elements.proceedBookingBtn.addEventListener('click', handleProceedBooking);
     
+    // New modal event listeners will be set up dynamically in their respective functions
+
+
     // Error handling
     elements.retryLoadBtn.addEventListener('click', loadInitialData);
     
@@ -1283,18 +1311,53 @@ async function showSeatSelectionModal(showtimeId) {
         const modal = new bootstrap.Modal(elements.seatSelectionModal);
         modal.show();
         
-        // Load seat statuses
-        const seatStatuses = await loadSeatStatuses(showtimeId);
+        // Step 1: Get showtime info to get auditorium ID
+        const showtime = allShowtimes.find(s => s.id == showtimeId);
+        if (!showtime || !showtime.auditoriumId) {
+            throw new Error('Showtime or auditorium information not found');
+        }
         
-        // Render seat map
-        renderSeatMap(seatStatuses);
+        console.log('Found showtime with auditorium ID:', showtime.auditoriumId);
+        
+        // Step 2: Load auditorium layout and seat statuses in parallel
+        const [auditoriumLayout, seatStatuses] = await Promise.all([
+            loadAuditoriumLayout(showtime.auditoriumId).catch(err => {
+                console.warn('Failed to load auditorium layout:', err.message);
+                return null; // Return null instead of throwing
+            }),
+            loadSeatStatuses(showtimeId).catch(err => {
+                console.warn('Failed to load seat statuses:', err.message);
+                return []; // Return empty array instead of throwing
+            })
+        ]);
+        
+        console.log('Loaded auditorium layout:', auditoriumLayout);
+        console.log('Loaded seat statuses:', seatStatuses);
+        
+        // Additional debugging for seat layout
+        if (auditoriumLayout && auditoriumLayout.seatLayout) {
+            console.log('Raw seatLayout string:', auditoriumLayout.seatLayout);
+            try {
+                const parsed = JSON.parse(auditoriumLayout.seatLayout);
+                console.log('Parsed seatLayout object:', parsed);
+                if (parsed.seats) {
+                    console.log('Seats array in layout:', parsed.seats);
+                    console.log('First seat example:', parsed.seats[0]);
+                }
+            } catch (parseError) {
+                console.error('Error parsing seatLayout JSON:', parseError);
+            }
+        }
+        
+        // Step 3: Render seat map with actual layout (or fallback if layout failed)
+        renderSeatMap(auditoriumLayout, seatStatuses);
         
     } catch (error) {
         console.error('Error loading seat selection:', error);
         elements.modalSeatContent.innerHTML = `
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                Error loading seat map. Please try again.
+                Error loading seat map: ${error.message}. Please try again.
             </div>
         `;
     }
@@ -1317,8 +1380,11 @@ async function loadSeatStatuses(showtimeId) {
             console.error('Seat statuses errors:', result.errors);
             throw new Error(result.errors[0].message);
         }
+
+        const seatStatuses = result.data?.seatStatuses || [];
+        console.log('Parsed seat statuses:', seatStatuses.length, 'seats');
         
-        return result.data?.seatStatuses || [];
+        return seatStatuses;
         
     } catch (error) {
         console.error('Error loading seat statuses:', error);
@@ -1326,12 +1392,400 @@ async function loadSeatStatuses(showtimeId) {
     }
 }
 
+async function loadAuditoriumLayout(auditoriumId) {
+    try {
+        console.log('Loading auditorium layout for auditorium:', auditoriumId);
+        
+        const result = await AuthService.graphqlRequest(
+            SHOWTIME_QUERIES.GET_AUDITORIUM_LAYOUT, 
+            { auditoriumId: parseInt(auditoriumId) }, 
+            false // Public access - CHANGED FROM true TO false
+        );
+        
+        console.log('Auditorium layout result:', result);
+        
+        if (result.errors) {
+            console.error('Auditorium layout errors:', result.errors);
+            throw new Error(result.errors[0].message);
+        }
+
+        const auditorium = result.data?.auditorium;
+        console.log('Parsed auditorium layout:', auditorium);
+        
+        return auditorium;
+        
+    } catch (error) {
+        console.error('Error loading auditorium layout:', error);
+        return null;
+    }
+}
 
 // Render seat map
-function renderSeatMap(seatStatuses) {
-    // Create a simple seat map (this would be more complex in a real app)
+function renderSeatMap(auditoriumLayout, seatStatuses) {
+    console.log('Rendering seat map with layout:', auditoriumLayout);
+    console.log('Seat statuses:', seatStatuses);
+    
+    selectedSeats = [];
+    updateSelectedSeatsDisplay();
+    
+    if (!auditoriumLayout || !auditoriumLayout.seatLayout) {
+        // Fallback to default layout if no layout specified
+        console.log('No auditorium layout found, using default layout');
+        renderDefaultSeatMap(seatStatuses);
+        return;
+    }
+    
+    try {
+        // Parse seat layout JSON
+        let seatLayout;
+        if (typeof auditoriumLayout.seatLayout === 'string') {
+            seatLayout = JSON.parse(auditoriumLayout.seatLayout);
+        } else {
+            seatLayout = auditoriumLayout.seatLayout;
+        }
+        
+        console.log('Parsed seat layout:', seatLayout);
+        console.log('Seat layout type:', typeof seatLayout);
+        console.log('Has seats property:', seatLayout.hasOwnProperty('seats'));
+        console.log('Seats is array:', Array.isArray(seatLayout.seats));
+        console.log('Seats length:', seatLayout.seats ? seatLayout.seats.length : 'undefined');
+        
+        let seatMapHtml = `
+            <div class="seat-map-container">
+                <div class="screen-indicator mb-4">
+                    <div class="screen">SCREEN</div>
+                </div>
+                <div class="auditorium-info mb-3">
+                    <h6 class="text-center">${auditoriumLayout.name || 'Auditorium'} - ${auditoriumLayout.cinema?.name || 'Cinema'}</h6>
+                </div>
+                <div class="seat-legend mb-3">
+                    <div class="d-flex justify-content-center gap-3">
+                        <div class="legend-item">
+                            <span class="seat-demo available"></span>
+                            <span>Available</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="seat-demo occupied"></span>
+                            <span>Occupied</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="seat-demo selected"></span>
+                            <span>Selected</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="seat-demo not-available"></span>
+                            <span>Not Available</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="seats-grid">
+        `;
+        
+        // FIXED: Better condition checks with more specific validation
+        if (seatLayout && 
+            seatLayout.hasOwnProperty('seats') && 
+            Array.isArray(seatLayout.seats) && 
+            seatLayout.seats.length > 0) {
+            
+            // Format 1: Array of seat objects - call directly
+            console.log('✅ Using seats array format with', seatLayout.seats.length, 'seats');
+            seatMapHtml += renderSeatsFromArray(seatLayout.seats, seatStatuses);
+            
+        } else if (seatLayout && 
+                  seatLayout.hasOwnProperty('rows') && 
+                  Array.isArray(seatLayout.rows) && 
+                  seatLayout.rows.length > 0) {
+            
+            // Format 2: Row-based layout
+            console.log('✅ Using rows format with', seatLayout.rows.length, 'rows');
+            seatMapHtml += renderSeatsFromRows(seatLayout.rows, seatStatuses);
+            
+        } else {
+            // Format 3: Fallback to default when no valid layout found
+            console.log('❌ No valid seat layout found, using default grid');
+            console.log('- seatLayout exists:', !!seatLayout);
+            console.log('- has seats property:', seatLayout ? seatLayout.hasOwnProperty('seats') : false);
+            console.log('- seats is array:', seatLayout && seatLayout.seats ? Array.isArray(seatLayout.seats) : false);
+            console.log('- seats length > 0:', seatLayout && seatLayout.seats ? seatLayout.seats.length > 0 : false);
+            seatMapHtml += renderDefaultSeatsGrid(seatStatuses);
+        }
+        
+        seatMapHtml += `
+                </div>
+            </div>
+        `;
+        
+        elements.modalSeatContent.innerHTML = seatMapHtml;
+        
+    } catch (error) {
+        console.error('Error parsing seat layout:', error);
+        // Fallback to default layout
+        renderDefaultSeatMap(seatStatuses);
+    }
+}
+
+// function renderSeatsWithAvailabilityCheck(seatLayout, seatStatuses) {
+//     console.log('Rendering seats with availability check');
+    
+//     // Extract available seat numbers from the layout
+//     const availableSeats = new Set();
+    
+//     if (seatLayout && seatLayout.seats && Array.isArray(seatLayout.seats)) {
+//         seatLayout.seats.forEach(seat => {
+//             const seatNumber = seat.number || seat.seatNumber || seat.id;
+//             if (seatNumber) {
+//                 availableSeats.add(seatNumber);
+//             }
+//         });
+//     }
+    
+//     // If no seats found in layout, fall back to default pattern
+//     if (availableSeats.size === 0) {
+//         console.warn('No seats found in layout, using default grid');
+//         return renderDefaultSeatsGrid(seatStatuses);
+//     }
+    
+//     // Group available seats by row
+//     const seatsByRow = {};
+//     availableSeats.forEach(seatNumber => {
+//         const rowLetter = seatNumber.charAt(0);
+//         if (!seatsByRow[rowLetter]) {
+//             seatsByRow[rowLetter] = [];
+//         }
+//         seatsByRow[rowLetter].push(seatNumber);
+//     });
+    
+//     // Sort rows alphabetically
+//     const sortedRows = Object.keys(seatsByRow).sort();
+    
+//     // Determine the maximum number of seats per row to create a grid
+//     const maxSeatsInRow = Math.max(...Object.values(seatsByRow).map(row => row.length));
+//     const maxSeatNumber = Math.max(...Object.values(seatsByRow).flat().map(seat => parseInt(seat.slice(1))));
+    
+//     let html = '';
+    
+//     sortedRows.forEach(row => {
+//         html += `<div class="seat-row" data-row="${row}">`;
+//         html += `<div class="row-label">${row}</div>`;
+        
+//         // Create a full grid showing all possible positions
+//         for (let i = 1; i <= maxSeatNumber; i++) {
+//             const seatNumber = `${row}${i}`;
+            
+//             if (availableSeats.has(seatNumber)) {
+//                 // This seat exists in the auditorium layout
+//                 const seatStatus = seatStatuses.find(s => s.seatNumber === seatNumber);
+//                 const isOccupied = seatStatus && seatStatus.status === 'BOOKED';
+                
+//                 html += `
+//                     <div class="seat ${isOccupied ? 'occupied' : 'available'}" 
+//                          data-seat="${seatNumber}" 
+//                          ${!isOccupied ? `onclick="toggleSeat('${seatNumber}')"` : ''}>
+//                         ${i}
+//                     </div>
+//                 `;
+//             } else {
+//                 // This seat doesn't exist in the auditorium layout
+//                 html += `
+//                     <div class="seat not-available" 
+//                          data-seat="${seatNumber}" 
+//                          title="This seat is not available in this auditorium">
+//                         ${i}
+//                     </div>
+//                 `;
+//             }
+//         }
+        
+//         html += `</div>`;
+//     });
+    
+//     return html;
+// }
+
+function renderSeatsFromArray(seats, seatStatuses) {
+    console.log('Rendering seats from array:', seats);
+    console.log('Number of seats in layout:', seats.length);
+    
+    // Extract available seat numbers from the seats array
+    const availableSeats = new Set();
+    seats.forEach(seat => {
+        // Handle different possible seat number field names
+        const seatNumber = seat.number || seat.seatNumber || seat.id || seat.name;
+        if (seatNumber) {
+            availableSeats.add(seatNumber);
+            console.log('Added seat to available set:', seatNumber);
+        }
+    });
+    
+    console.log('Available seats set:', Array.from(availableSeats));
+    
+    if (availableSeats.size === 0) {
+        console.warn('No valid seat numbers found in seats array, using default grid');
+        return renderDefaultSeatsGrid(seatStatuses);
+    }
+    
+    // Group seats by row (assuming seat numbers like A1, A2, B1, B2...)
+    const seatsByRow = {};
+    let maxSeatNumber = 0;
+    
+    availableSeats.forEach(seatNumber => {
+        const rowLetter = seatNumber.charAt(0).toUpperCase();
+        const seatNum = parseInt(seatNumber.slice(1));
+        
+        if (!seatsByRow[rowLetter]) {
+            seatsByRow[rowLetter] = [];
+        }
+        seatsByRow[rowLetter].push(seatNumber);
+        maxSeatNumber = Math.max(maxSeatNumber, seatNum);
+    });
+    
+    console.log('Seats grouped by row:', seatsByRow);
+    console.log('Max seat number found:', maxSeatNumber);
+    
+    // Sort rows alphabetically
+    const sortedRows = Object.keys(seatsByRow).sort();
+    
+    let html = '';
+    sortedRows.forEach(row => {
+        html += `<div class="seat-row" data-row="${row}">`;
+        html += `<div class="row-label">${row}</div>`;
+        
+        // Create full grid showing available and not-available seats
+        for (let i = 1; i <= maxSeatNumber; i++) {
+            const seatNumber = `${row}${i}`;
+            
+            if (availableSeats.has(seatNumber)) {
+                // Seat exists in auditorium
+                const seatStatus = seatStatuses.find(s => s.seatNumber === seatNumber);
+                const isOccupied = seatStatus && seatStatus.status === 'BOOKED';
+                
+                html += `
+                    <div class="seat ${isOccupied ? 'occupied' : 'available'}" 
+                         data-seat="${seatNumber}" 
+                         ${!isOccupied ? `onclick="toggleSeat('${seatNumber}')"` : ''}>
+                        ${i}
+                    </div>
+                `;
+            } else {
+                // Seat doesn't exist in this auditorium
+                html += `
+                    <div class="seat not-available" 
+                         data-seat="${seatNumber}" 
+                         title="Seat not available in this auditorium">
+                        ${i}
+                    </div>
+                `;
+            }
+        }
+        
+        html += `</div>`;
+    });
+    
+    console.log('Generated HTML length:', html.length);
+    return html;
+}
+
+function renderSeatsFromRows(rows, seatStatuses) {
+    console.log('Rendering seats from rows format:', rows);
+    
+    let html = '';
+    
+    if (Array.isArray(rows)) {
+        // First pass: determine the maximum number of seats per row
+        let maxSeatsPerRow = 0;
+        const availableSeatsByRow = {};
+        
+        rows.forEach((row, rowIndex) => {
+            const rowLetter = String.fromCharCode(65 + rowIndex); // A, B, C...
+            availableSeatsByRow[rowLetter] = new Set();
+            
+            if (row.seats && Array.isArray(row.seats)) {
+                maxSeatsPerRow = Math.max(maxSeatsPerRow, row.seats.length);
+                row.seats.forEach((seat, seatIndex) => {
+                    const seatNumber = `${rowLetter}${seatIndex + 1}`;
+                    availableSeatsByRow[rowLetter].add(seatNumber);
+                });
+            }
+        });
+        
+        // Second pass: render with not-available indicators
+        rows.forEach((row, rowIndex) => {
+            const rowLetter = String.fromCharCode(65 + rowIndex); // A, B, C...
+            
+            html += `<div class="seat-row" data-row="${rowLetter}">`;
+            html += `<div class="row-label">${rowLetter}</div>`;
+            
+            // Create full grid for this row
+            for (let i = 1; i <= maxSeatsPerRow; i++) {
+                const seatNumber = `${rowLetter}${i}`;
+                
+                if (availableSeatsByRow[rowLetter].has(seatNumber)) {
+                    // Seat exists in auditorium
+                    const seatStatus = seatStatuses.find(s => s.seatNumber === seatNumber);
+                    const isOccupied = seatStatus && seatStatus.status === 'BOOKED';
+                    
+                    html += `
+                        <div class="seat ${isOccupied ? 'occupied' : 'available'}" 
+                             data-seat="${seatNumber}" 
+                             ${!isOccupied ? `onclick="toggleSeat('${seatNumber}')"` : ''}>
+                            ${i}
+                        </div>
+                    `;
+                } else {
+                    // Seat doesn't exist in this auditorium
+                    html += `
+                        <div class="seat not-available" 
+                             data-seat="${seatNumber}" 
+                             title="Seat not available in this auditorium">
+                            ${i}
+                        </div>
+                    `;
+                }
+            }
+            
+            html += `</div>`;
+        });
+    }
+    
+    return html;
+}
+
+function renderDefaultSeatsGrid(seatStatuses) {
+    console.log('Rendering default seats grid');
+    
+    // Generate default 6 rows x 10 seats layout
     const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
     const seatsPerRow = 10;
+    
+    let html = '';
+    
+    rows.forEach(row => {
+        html += `<div class="seat-row" data-row="${row}">`;
+        html += `<div class="row-label">${row}</div>`;
+        
+        for (let i = 1; i <= seatsPerRow; i++) {
+            const seatNumber = `${row}${i}`;
+
+            const seatStatus = seatStatuses.find(s => s.seatNumber === seatNumber);
+            const isOccupied = seatStatus && seatStatus.status === 'BOOKED';
+            
+            html += `
+                <div class="seat ${isOccupied ? 'occupied' : 'available'}" 
+                     data-seat="${seatNumber}" 
+                     ${!isOccupied ? `onclick="toggleSeat('${seatNumber}')"` : ''}>
+                    ${i}
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+    });
+    
+    return html;
+}
+
+function renderDefaultSeatMap(seatStatuses) {
+    console.log('Rendering fallback default seat map');
     
     selectedSeats = [];
     updateSelectedSeatsDisplay();
@@ -1342,7 +1796,7 @@ function renderSeatMap(seatStatuses) {
                 <div class="screen">SCREEN</div>
             </div>
             <div class="seat-legend mb-3">
-                <div class="d-flex justify-content-center gap-4">
+                <div class="d-flex justify-content-center gap-3">
                     <div class="legend-item">
                         <span class="seat-demo available"></span>
                         <span>Available</span>
@@ -1355,32 +1809,16 @@ function renderSeatMap(seatStatuses) {
                         <span class="seat-demo selected"></span>
                         <span>Selected</span>
                     </div>
+                    <div class="legend-item">
+                        <span class="seat-demo not-available"></span>
+                        <span>Not Available</span>
+                    </div>
                 </div>
             </div>
             <div class="seats-grid">
     `;
     
-    rows.forEach(row => {
-        seatMapHtml += `<div class="seat-row" data-row="${row}">`;
-        seatMapHtml += `<div class="row-label">${row}</div>`;
-        
-        for (let i = 1; i <= seatsPerRow; i++) {
-            const seatNumber = `${row}${i}`;
-            // FIXED: Use camelCase seatNumber
-            const seatStatus = seatStatuses.find(s => s.seatNumber === seatNumber);
-            const isOccupied = seatStatus && seatStatus.status === 'BOOKED';
-            
-            seatMapHtml += `
-                <div class="seat ${isOccupied ? 'occupied' : 'available'}" 
-                     data-seat="${seatNumber}" 
-                     ${!isOccupied ? `onclick="toggleSeat('${seatNumber}')"` : ''}>
-                    ${i}
-                </div>
-            `;
-        }
-        
-        seatMapHtml += `</div>`;
-    });
+    seatMapHtml += renderDefaultSeatsGrid(seatStatuses);
     
     seatMapHtml += `
             </div>
@@ -1393,7 +1831,17 @@ function renderSeatMap(seatStatuses) {
 // Toggle seat selection
 function toggleSeat(seatNumber) {
     const seatElement = document.querySelector(`[data-seat="${seatNumber}"]`);
-    if (!seatElement || seatElement.classList.contains('occupied')) return;
+    
+    // Prevent selection of occupied or not-available seats
+    if (!seatElement || 
+        seatElement.classList.contains('occupied') || 
+        seatElement.classList.contains('not-available')) {
+        
+        if (seatElement && seatElement.classList.contains('not-available')) {
+            AuthService.showMessage('This seat is not available in this auditorium', 'warning');
+        }
+        return;
+    }
     
     if (selectedSeats.includes(seatNumber)) {
         // Deselect seat
@@ -1412,6 +1860,199 @@ function toggleSeat(seatNumber) {
     }
     
     updateSelectedSeatsDisplay();
+}
+
+function showBookingConfirmationModal(booking, selectedSeats, totalPrice) {
+    try {
+        console.log('Showing booking confirmation for:', booking);
+        
+        // Get showtime details for confirmation
+        const showtime = allShowtimes.find(s => s.id == booking.showtimeId);
+        
+        if (!showtime) {
+            throw new Error('Showtime details not found');
+        }
+        
+        const startTime = showtime.startTime ? new Date(showtime.startTime) : null;
+        const timeDisplay = startTime ? startTime.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+        }) : 'TBD';
+        const dateDisplay = startTime ? startTime.toLocaleDateString('en-US', { 
+            weekday: 'long',
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        }) : 'TBD';
+        
+        const bookingDate = booking.bookingDate ? new Date(booking.bookingDate) : new Date();
+        const bookingDateDisplay = bookingDate.toLocaleDateString('en-US', { 
+            weekday: 'long',
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        elements.modalBookingContent.innerHTML = `
+            <div class="booking-confirmation-content">
+                <div class="text-center mb-4">
+                    <div class="success-icon mb-3">
+                        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                    </div>
+                    <h4 class="text-success">Booking Successfully Created!</h4>
+                    <p class="text-muted">Your seats have been reserved. Please complete payment to confirm your booking.</p>
+                </div>
+                
+                <div class="booking-details">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-card mb-3">
+                                <h6 class="detail-header">
+                                    <i class="fas fa-ticket-alt me-2"></i>Booking Details
+                                </h6>
+                                <div class="detail-content">
+                                    <div class="detail-row">
+                                        <span class="label">Booking ID:</span>
+                                        <span class="value">#${booking.id}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Status:</span>
+                                        <span class="value">
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="fas fa-clock me-1"></i>${booking.status || 'PENDING'}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Booking Date:</span>
+                                        <span class="value">${bookingDateDisplay}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card mb-3">
+                                <h6 class="detail-header">
+                                    <i class="fas fa-film me-2"></i>Movie Details
+                                </h6>
+                                <div class="detail-content">
+                                    <div class="detail-row">
+                                        <span class="label">Movie:</span>
+                                        <span class="value">${showtime.movie?.title || 'Unknown Movie'}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Date & Time:</span>
+                                        <span class="value">${dateDisplay} at ${timeDisplay}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Cinema:</span>
+                                        <span class="value">${showtime.auditorium?.cinema?.name || 'Unknown Cinema'}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Hall:</span>
+                                        <span class="value">${showtime.auditorium?.name || 'Unknown Hall'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-card mb-3">
+                                <h6 class="detail-header">
+                                    <i class="fas fa-chair me-2"></i>Selected Seats
+                                </h6>
+                                <div class="detail-content">
+                                    <div class="seats-display">
+                                        ${selectedSeats.map(seat => `
+                                            <span class="seat-badge">
+                                                <i class="fas fa-chair me-1"></i>${seat}
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                    <div class="detail-row mt-2">
+                                        <span class="label">Total Seats:</span>
+                                        <span class="value">${selectedSeats.length} seat(s)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-card mb-3">
+                                <h6 class="detail-header">
+                                    <i class="fas fa-dollar-sign me-2"></i>Payment Summary
+                                </h6>
+                                <div class="detail-content">
+                                    <div class="detail-row">
+                                        <span class="label">Price per seat:</span>
+                                        <span class="value">$${currentShowtimePrice.toFixed(2)}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Number of seats:</span>
+                                        <span class="value">${selectedSeats.length}</span>
+                                    </div>
+                                    <div class="detail-row total-row">
+                                        <span class="label"><strong>Total Amount:</strong></span>
+                                        <span class="value total-amount">
+                                            <strong>$${totalPrice.toFixed(2)}</strong>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Important:</strong> Your seats are reserved for 15 minutes. Please complete payment to confirm your booking.
+                </div>
+            </div>
+        `;
+        
+        // Store booking data for payment
+        currentBookingData = {
+            bookingId: booking.id,
+            totalAmount: totalPrice,
+            showtime: showtime,
+            seats: selectedSeats
+        };
+        
+        // Show the modal
+        const modal = new bootstrap.Modal(elements.bookingConfirmationModal);
+        modal.show();
+        
+        // Setup event listeners for modal buttons
+        setupBookingConfirmationListeners();
+        
+    } catch (error) {
+        console.error('Error showing booking confirmation:', error);
+        AuthService.showMessage(`Error displaying booking confirmation: ${error.message}`, 'error');
+    }
+}
+
+function setupBookingConfirmationListeners() {
+    // Proceed to payment button
+    elements.proceedPaymentBtn.onclick = function() {
+        const bookingModal = bootstrap.Modal.getInstance(elements.bookingConfirmationModal);
+        bookingModal.hide();
+        showPaymentModal();
+    };
+    
+    // View bookings button
+    elements.viewBookingsBtn.onclick = function() {
+        const bookingModal = bootstrap.Modal.getInstance(elements.bookingConfirmationModal);
+        bookingModal.hide();
+        
+        // Redirect to dashboard bookings section
+        setTimeout(() => {
+            window.location.href = '/dashboard#bookings';
+        }, 300);
+    };
 }
 
 // Update selected seats display
@@ -1438,32 +2079,42 @@ function handleProceedBooking() {
 // Proceed with booking (simplified version)
 async function proceedWithBooking() {
     try {
+        if (selectedSeats.length === 0 || !currentShowtimeId) {
+            throw new Error('Please select at least one seat');
+        }
+
         const totalPrice = selectedSeats.length * currentShowtimePrice;
         
         // Show loading state
         elements.proceedBookingBtn.disabled = true;
         elements.proceedBookingBtn.innerHTML = `
             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-            Processing...
+            Processing Booking...
         `;
         
-        // Call booking API
-        const result = await AuthService.createBooking(currentShowtimeId, selectedSeats, totalPrice);
+        console.log('Creating booking with:', {
+            showtimeId: currentShowtimeId,
+            seatNumbers: selectedSeats,
+            totalPrice: totalPrice
+        });
         
-        if (result.success) {
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(elements.seatSelectionModal);
-            modal.hide();
+        // Call the GraphQL createBooking mutation
+        const bookingResult = await createBooking(currentShowtimeId, selectedSeats, totalPrice);
+        
+        if (bookingResult.success) {
+            // Close seat selection modal
+            const seatModal = bootstrap.Modal.getInstance(elements.seatSelectionModal);
+            seatModal.hide();
             
-            // Show success message
-            AuthService.showMessage('Booking successful! Redirecting to your bookings...', 'success');
+            // Show booking confirmation modal
+            showBookingConfirmationModal(bookingResult.booking, selectedSeats, totalPrice);
             
-            // Redirect to bookings page
-            setTimeout(() => {
-                window.location.href = '/dashboard#bookings';
-            }, 2000);
+            // Reset selected seats
+            selectedSeats = [];
+            updateSelectedSeatsDisplay();
+            
         } else {
-            throw new Error(result.message || 'Booking failed');
+            throw new Error(bookingResult.message || 'Booking failed');
         }
         
     } catch (error) {
@@ -1476,6 +2127,299 @@ async function proceedWithBooking() {
             <i class="fas fa-shopping-cart me-2"></i>Proceed to Booking
         `;
     }
+}
+
+async function createBooking(showtimeId, seatNumbers, totalPrice) {
+    try {
+        const mutation = `
+            mutation CreateBooking($showtimeId: Int!, $seatNumbers: [String!]!, $totalPrice: Float!) {
+                createBooking(showtimeId: $showtimeId, seatNumbers: $seatNumbers, totalPrice: $totalPrice) {
+                    booking {
+                        id
+                        userId
+                        showtimeId
+                        status
+                        totalPrice
+                        bookingDate
+                    }
+                    success
+                    message
+                }
+            }
+        `;
+
+        const variables = {
+            showtimeId: parseInt(showtimeId),
+            seatNumbers: seatNumbers,
+            totalPrice: parseFloat(totalPrice)
+        };
+
+        console.log('Sending GraphQL mutation:', { mutation, variables });
+
+        const result = await AuthService.graphqlRequest(mutation, variables, true);
+        
+        console.log('GraphQL booking result:', result);
+
+        if (result.errors) {
+            throw new Error(result.errors[0].message);
+        }
+
+        const bookingData = result.data.createBooking;
+        if (!bookingData.success) {
+            throw new Error(bookingData.message || 'Booking failed');
+        }
+
+        return bookingData;
+        
+    } catch (error) {
+        console.error('Error creating booking:', error);
+        throw error;
+    }
+}
+let currentBookingData = null;
+// Show payment modal
+function showPaymentModal() {
+    try {
+        if (!currentBookingData) {
+            throw new Error('No booking data available');
+        }
+        
+        const { bookingId, totalAmount, showtime, seats } = currentBookingData;
+        
+        elements.modalPaymentContent.innerHTML = `
+            <div class="payment-form-content">
+                <div class="booking-summary mb-4">
+                    <h6 class="mb-3">
+                        <i class="fas fa-receipt me-2"></i>Booking Summary
+                    </h6>
+                    <div class="summary-card">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="summary-details">
+                                    <div class="detail-row">
+                                        <span class="label">Booking ID:</span>
+                                        <span class="value">#${bookingId}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Movie:</span>
+                                        <span class="value">${showtime.movie?.title}</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span class="label">Seats:</span>
+                                        <span class="value">${seats.join(', ')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="total-display">
+                                    <div class="total-label">Total Amount</div>
+                                    <div class="total-value">$${totalAmount.toFixed(2)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="payment-methods mb-4">
+                    <h6 class="mb-3">
+                        <i class="fas fa-credit-card me-2"></i>Payment Method
+                    </h6>
+                    <div class="payment-options">
+                        <div class="form-check payment-option">
+                            <input class="form-check-input" type="radio" name="paymentMethod" id="creditCard" value="CREDIT_CARD" checked>
+                            <label class="form-check-label" for="creditCard">
+                                <i class="fas fa-credit-card me-2"></i>Credit Card
+                            </label>
+                        </div>
+                        <div class="form-check payment-option">
+                            <input class="form-check-input" type="radio" name="paymentMethod" id="debitCard" value="DEBIT_CARD">
+                            <label class="form-check-label" for="debitCard">
+                                <i class="fas fa-money-check-alt me-2"></i>Debit Card
+                            </label>
+                        </div>
+                        <div class="form-check payment-option">
+                            <input class="form-check-input" type="radio" name="paymentMethod" id="digitalWallet" value="DIGITAL_WALLET">
+                            <label class="form-check-label" for="digitalWallet">
+                                <i class="fas fa-mobile-alt me-2"></i>Digital Wallet
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="payment-proof mb-4">
+                    <h6 class="mb-3">
+                        <i class="fas fa-upload me-2"></i>Payment Proof (Optional)
+                    </h6>
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="paymentProofFile" accept="image/*">
+                        <div class="form-text">Upload payment receipt or proof (JPG, PNG, max 5MB)</div>
+                    </div>
+                </div>
+                
+                <div class="payment-terms">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                        <label class="form-check-label" for="agreeTerms">
+                            I agree to the <a href="/terms" target="_blank">Terms and Conditions</a> and <a href="/privacy" target="_blank">Privacy Policy</a>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Show payment modal
+        const modal = new bootstrap.Modal(elements.paymentModal);
+        modal.show();
+        
+        // Setup payment completion listener
+        setupPaymentListeners();
+        
+    } catch (error) {
+        console.error('Error showing payment modal:', error);
+        AuthService.showMessage(`Error displaying payment form: ${error.message}`, 'error');
+    }
+}
+
+// Setup payment modal listeners
+function setupPaymentListeners() {
+    elements.completePaymentBtn.onclick = async function() {
+        await processPayment();
+    };
+}
+
+// Process payment
+async function processPayment() {
+    try {
+        if (!currentBookingData) {
+            throw new Error('No booking data available');
+        }
+        
+        // Validate terms agreement
+        const agreeTerms = document.getElementById('agreeTerms');
+        if (!agreeTerms.checked) {
+            throw new Error('Please agree to the terms and conditions');
+        }
+        
+        // Get selected payment method
+        const selectedPaymentMethod = document.querySelector('input[name="paymentMethod"]:checked');
+        if (!selectedPaymentMethod) {
+            throw new Error('Please select a payment method');
+        }
+        
+        // Get payment proof file (optional)
+        const paymentProofFile = document.getElementById('paymentProofFile');
+        let paymentProofImage = null;
+        
+        if (paymentProofFile.files.length > 0) {
+            // Convert file to base64 (simplified for demo)
+            paymentProofImage = await fileToBase64(paymentProofFile.files[0]);
+        }
+        
+        // Show loading state
+        elements.completePaymentBtn.disabled = true;
+        elements.completePaymentBtn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            Processing Payment...
+        `;
+        
+        // Create payment via GraphQL mutation
+        const paymentResult = await createPayment(
+            currentBookingData.bookingId,
+            selectedPaymentMethod.value,
+            paymentProofImage
+        );
+        
+        if (paymentResult.success) {
+            // Close payment modal
+            const paymentModal = bootstrap.Modal.getInstance(elements.paymentModal);
+            paymentModal.hide();
+            
+            // Show success message
+            AuthService.showMessage('Payment successful! Your booking has been confirmed.', 'success');
+            
+            // Redirect to bookings page after a delay
+            setTimeout(() => {
+                window.location.href = '/dashboard#bookings';
+            }, 2000);
+            
+        } else {
+            throw new Error(paymentResult.message || 'Payment failed');
+        }
+        
+    } catch (error) {
+        console.error('Payment error:', error);
+        AuthService.showMessage(`Payment failed: ${error.message}`, 'error');
+        
+        // Reset button
+        elements.completePaymentBtn.disabled = false;
+        elements.completePaymentBtn.innerHTML = `
+            <i class="fas fa-lock me-2"></i>Complete Payment
+        `;
+    }
+}
+
+// Create payment via GraphQL mutation
+async function createPayment(bookingId, paymentMethod, paymentProofImage) {
+    try {
+        const mutation = `
+            mutation CreatePayment($bookingId: Int!, $paymentMethod: String!, $paymentProofImage: String) {
+                createPayment(bookingId: $bookingId, paymentMethod: $paymentMethod, paymentProofImage: $paymentProofImage) {
+                    payment {
+                        id
+                        bookingId
+                        amount
+                        paymentMethod
+                        status
+                        createdAt
+                    }
+                    success
+                    message
+                }
+            }
+        `;
+
+        const variables = {
+            bookingId: parseInt(bookingId),
+            paymentMethod: paymentMethod,
+            paymentProofImage: paymentProofImage
+        };
+
+        console.log('Creating payment with variables:', variables);
+
+        const result = await AuthService.graphqlRequest(mutation, variables, true);
+        
+        console.log('Payment result:', result);
+
+        if (result.errors) {
+            throw new Error(result.errors[0].message);
+        }
+
+        const paymentData = result.data.createPayment;
+        if (!paymentData.success) {
+            throw new Error(paymentData.message || 'Payment failed');
+        }
+
+        return paymentData;
+        
+    } catch (error) {
+        console.error('Error creating payment:', error);
+        throw error;
+    }
+}
+
+// Helper function to convert file to base64
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            reject(new Error('File size too large. Maximum 5MB allowed.'));
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
 }
 
 // Handle login requirement

@@ -52,6 +52,18 @@ def cinemas_page():
 def showtimes_page():
     return send_file('./static/templates/showtimes.html')
 
+@app.route('/bookings')
+def bookings_page():
+    return send_file('./static/templates/bookings.html')
+
+@app.route('/payments')
+def payments_page():
+    return send_file('./static/templates/payments.html')
+
+@app.route('/coupons')
+def coupons_page():
+    return send_file('./static/templates/coupons.html')
+
 
 @app.route('/dashboard')
 def dashboard_page():

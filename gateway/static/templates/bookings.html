@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Showtimes - Cinema Booking System</title>
+  <title>My Bookings - Cinema Booking System</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Font Awesome -->
@@ -41,8 +41,23 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link active" href="/showtimes">
+            <a class="nav-link" href="/showtimes">
               <i class="fas fa-calendar-alt me-1"></i> Showtimes
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="/bookings">
+              <i class="fas fa-calendar-check me-1"></i> Bookings
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/payments">
+              <i class="fas fa-credit-card me-1"></i> Payments
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/coupons">
+              <i class="fas fa-tags me-1"></i> Coupons
             </a>
           </li>
         </ul>
@@ -65,18 +80,18 @@
                   <i class="fas fa-home me-1"></i>Home
                 </a>
               </li>
-              <li class="breadcrumb-item active" aria-current="page">Showtimes</li>
+              <li class="breadcrumb-item active" aria-current="page">My Bookings</li>
             </ol>
           </nav>
           <h1 class="page-title mb-0">
-            <i class="fas fa-calendar-alt me-3"></i>Movie Showtimes
+            <i class="fas fa-calendar-check me-3"></i>My Bookings
           </h1>
-          <p class="page-subtitle mb-0">Find the perfect showtime for your movie experience</p>
+          <p class="page-subtitle mb-0">Manage and track your movie ticket bookings</p>
         </div>
         <div class="col-md-4 text-end">
           <div class="page-stats">
-            <span class="badge bg-primary fs-6" id="showtime-count">
-              <i class="fas fa-clock me-1"></i>Loading...
+            <span class="badge bg-primary fs-6" id="booking-count">
+              <i class="fas fa-ticket-alt me-1"></i>Loading...
             </span>
           </div>
         </div>
@@ -84,67 +99,75 @@
     </div>
   </section>
 
-  <!-- Filter Section -->
+  <!-- Filter and Search Section -->
   <section class="filter-section">
     <div class="container">
       <div class="card filter-card">
         <div class="card-body">
           <div class="row align-items-center">
-            <div class="col-md-2">
-              <label for="movie-filter" class="form-label fw-semibold">
-                <i class="fas fa-film me-2"></i>Filter by Movie
+            <div class="col-md-3">
+              <label for="status-filter" class="form-label fw-semibold">
+                <i class="fas fa-filter me-2"></i>Filter by Status
               </label>
-              <select class="form-select" id="movie-filter">
-                <option value="">All Movies</option>
-                <!-- Movies will be populated dynamically -->
+              <select class="form-select" id="status-filter">
+                <option value="">All Bookings</option>
+                <option value="PENDING">Pending Payment</option>
+                <option value="PAID">Paid</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="CANCELLED">Cancelled</option>
+                <option value="EXPIRED">Expired</option>
               </select>
             </div>
-            <div class="col-md-2">
-              <label for="cinema-filter" class="form-label fw-semibold">
-                <i class="fas fa-building me-2"></i>Filter by Cinema
+            <div class="col-md-3">
+              <label for="date-range-filter" class="form-label fw-semibold">
+                <i class="fas fa-calendar me-2"></i>Date Range
               </label>
-              <select class="form-select" id="cinema-filter">
-                <option value="">All Cinemas</option>
-                <!-- Cinemas will be populated dynamically -->
+              <select class="form-select" id="date-range-filter">
+                <option value="">All Time</option>
+                <option value="today">Today</option>
+                <option value="this-week">This Week</option>
+                <option value="this-month">This Month</option>
+                <option value="last-month">Last Month</option>
+                <option value="custom">Custom Range</option>
               </select>
             </div>
-            <div class="col-md-2">
-              <label for="date-filter" class="form-label fw-semibold">
-                <i class="fas fa-calendar me-2"></i>Select Date
+            <div class="col-md-3">
+              <label for="movie-search" class="form-label fw-semibold">
+                <i class="fas fa-search me-2"></i>Search Movie
               </label>
-              <input type="date" class="form-control" id="date-filter">
+              <div class="input-group">
+                <input type="text" class="form-control" id="movie-search" placeholder="Search by movie title...">
+                <button class="btn btn-outline-primary" type="button" id="clear-search">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
             </div>
-            <div class="col-md-2">
-              <label for="time-filter" class="form-label fw-semibold">
-                <i class="fas fa-clock me-2"></i>Time Range
-              </label>
-              <select class="form-select" id="time-filter">
-                <option value="">Any Time</option>
-                <option value="morning">Morning (06:00-12:00)</option>
-                <option value="afternoon">Afternoon (12:00-18:00)</option>
-                <option value="evening">Evening (18:00-24:00)</option>
-              </select>
-            </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
               <label for="sort-filter" class="form-label fw-semibold">
                 <i class="fas fa-sort me-2"></i>Sort By
               </label>
               <select class="form-select" id="sort-filter">
-                <option value="time">Time (Earliest First)</option>
+                <option value="date-desc">Newest First</option>
+                <option value="date-asc">Oldest First</option>
                 <option value="movie">Movie Title</option>
-                <option value="cinema">Cinema Name</option>
-                <option value="price">Price (Low to High)</option>
+                <option value="status">Status</option>
+                <option value="amount">Amount</option>
               </select>
             </div>
-            <div class="col-md-2">
-              <label for="search-input" class="form-label fw-semibold">
-                <i class="fas fa-search me-2"></i>Search
-              </label>
-              <div class="input-group">
-                <input type="text" class="form-control text-white" id="search-input" placeholder="Search..." style="background-color: transparent; border-color: #495057;">
-                <button class="btn btn-outline-primary" type="button" id="clear-search">
-                  <i class="fas fa-times"></i>
-                </button>
+          </div>
+          <div class="row mt-3">
+            <div class="col-12">
+              <div class="custom-date-range" id="custom-date-range" style="display: none;">
+                <div class="row">
+                  <div class="col-md-6">
+                    <label for="start-date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="start-date">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="end-date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end-date">
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -156,16 +179,13 @@
               <button class="btn btn-outline-secondary ms-2" id="clear-filters">
                 <i class="fas fa-undo me-2"></i>Clear All
               </button>
-              <button class="btn btn-outline-info ms-2" id="today-filter">
-                <i class="fas fa-calendar-day me-2"></i>Today's Shows
-              </button>
               <div class="float-end">
                 <div class="btn-group" role="group" aria-label="View toggle">
-                  <button type="button" class="btn btn-outline-primary active" id="grid-view">
-                    <i class="fas fa-th"></i>
+                  <button type="button" class="btn btn-outline-primary active" id="card-view">
+                    <i class="fas fa-th-large"></i> Cards
                   </button>
-                  <button type="button" class="btn btn-outline-primary" id="timeline-view">
-                    <i class="fas fa-list-ul"></i>
+                  <button type="button" class="btn btn-outline-primary" id="table-view">
+                    <i class="fas fa-list"></i> Table
                   </button>
                 </div>
               </div>
@@ -176,29 +196,53 @@
     </div>
   </section>
 
-  <!-- Showtimes Grid Section -->
-  <section class="showtimes-section py-5">
+  <!-- Bookings Section -->
+  <section class="bookings-section py-5">
     <div class="container">
       <!-- Loading State -->
       <div class="row" id="loading-container">
         <div class="col-12 text-center">
           <div class="loading-spinner">
             <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
-              <span class="visually-hidden">Loading showtimes...</span>
+              <span class="visually-hidden">Loading bookings...</span>
             </div>
-            <p class="text-muted">Loading showtimes...</p>
+            <p class="text-muted">Loading your bookings...</p>
           </div>
         </div>
       </div>
 
-      <!-- Showtimes Grid Container -->
-      <div class="row g-4" id="showtimes-grid" style="display: none;">
-        <!-- Showtimes will be dynamically loaded here -->
+      <!-- Bookings Cards Container -->
+      <div class="row g-4" id="bookings-cards" style="display: none;">
+        <!-- Booking cards will be dynamically loaded here -->
       </div>
 
-      <!-- Showtimes Timeline Container -->
-      <div class="row" id="showtimes-timeline" style="display: none;">
-        <!-- Timeline view will be dynamically loaded here -->
+      <!-- Bookings Table Container -->
+      <div class="row" id="bookings-table" style="display: none;">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                  <thead class="table-dark">
+                    <tr>
+                      <th>Booking ID</th>
+                      <th>Movie</th>
+                      <th>Date & Time</th>
+                      <th>Cinema</th>
+                      <th>Seats</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bookings-table-body">
+                    <!-- Table rows will be dynamically loaded here -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->
@@ -206,14 +250,14 @@
         <div class="col-12 text-center py-5">
           <div class="empty-state-content">
             <i class="fas fa-calendar-times empty-state-icon text-muted mb-4"></i>
-            <h3 class="text-muted">No Showtimes Found</h3>
+            <h3 class="text-muted">No Bookings Found</h3>
             <p class="text-muted mb-4">
-              We couldn't find any showtimes matching your criteria.<br>
-              Try adjusting your filters or selecting a different date.
+              You haven't made any bookings yet.<br>
+              Start exploring movies and book your tickets!
             </p>
-            <button class="btn btn-primary" id="reset-filters">
-              <i class="fas fa-undo me-2"></i>Reset Filters
-            </button>
+            <a href="/movies" class="btn btn-primary">
+              <i class="fas fa-film me-2"></i>Browse Movies
+            </a>
           </div>
         </div>
       </div>
@@ -223,27 +267,11 @@
         <div class="col-12 text-center py-5">
           <div class="alert alert-danger">
             <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>Error Loading Showtimes</strong>
-            <p class="mb-2" id="error-message">Unable to load showtimes at the moment.</p>
+            <strong>Error Loading Bookings</strong>
+            <p class="mb-2" id="error-message">Unable to load your bookings at the moment.</p>
             <button class="btn btn-outline-danger" id="retry-load">
               <i class="fas fa-redo me-2"></i>Try Again
             </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Date Navigation -->
-      <div class="row mb-4" id="date-navigation" style="display: none;">
-        <div class="col-12">
-          <div class="card date-nav-card">
-            <div class="card-body">
-              <h5 class="mb-3">
-                <i class="fas fa-calendar-week me-2"></i>Quick Date Selection
-              </h5>
-              <div class="d-flex flex-wrap gap-2" id="date-buttons">
-                <!-- Date buttons will be generated dynamically -->
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -257,11 +285,11 @@
         <div class="col-md-6">
           <p class="mb-0 text-muted" id="pagination-info">
             Showing <span id="showing-start">1</span> to <span id="showing-end">12</span> 
-            of <span id="total-showtimes">0</span> showtimes
+            of <span id="total-bookings">0</span> bookings
           </p>
         </div>
         <div class="col-md-6">
-          <nav aria-label="Showtimes pagination">
+          <nav aria-label="Bookings pagination">
             <ul class="pagination justify-content-end mb-0" id="pagination-controls">
               <!-- Pagination controls will be dynamically generated -->
             </ul>
@@ -271,101 +299,92 @@
     </div>
   </section>
 
-  <!-- Showtime Detail Modal -->
-  <div class="modal fade" id="showtimeDetailModal" tabindex="-1" aria-labelledby="showtimeDetailModalLabel" aria-hidden="true">
+  <!-- Booking Detail Modal -->
+  <div class="modal fade" id="bookingDetailModal" tabindex="-1" aria-labelledby="bookingDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="showtimeDetailModalLabel">Showtime Details</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body" id="modal-showtime-content">
-          <!-- Showtime details will be loaded here -->
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-success" id="book-seats-btn">
-            <i class="fas fa-chair me-2"></i>Select Seats
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Seat Selection Modal -->
-  <div class="modal fade" id="seatSelectionModal" tabindex="-1" aria-labelledby="seatSelectionModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="seatSelectionModalLabel">Select Your Seats</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body" id="modal-seat-content">
-          <!-- Seat selection will be loaded here -->
-        </div>
-        <div class="modal-footer">
-          <div class="selected-seats-info me-auto">
-            <span class="text-muted">Selected seats: </span>
-            <span id="selected-seats-display" class="fw-bold text-primary">None</span>
-            <span class="ms-3 text-muted">Total: </span>
-            <span id="total-price-display" class="fw-bold text-success">$0.00</span>
-          </div>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary" id="proceed-booking-btn" disabled>
-            <i class="fas fa-shopping-cart me-2"></i>Proceed to Booking
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-    <!-- Booking Confirmation Modal -->
-  <div class="modal fade" id="bookingConfirmationModal" tabindex="-1" aria-labelledby="bookingConfirmationModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header bg-success text-white">
-          <h5 class="modal-title" id="bookingConfirmationModalLabel">
-            <i class="fas fa-check-circle me-2"></i>Booking Confirmed!
+          <h5 class="modal-title" id="bookingDetailModalLabel">
+            <i class="fas fa-ticket-alt me-2"></i>Booking Details
           </h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body" id="modal-booking-content">
-          <!-- Booking confirmation details will be loaded here -->
+        <div class="modal-body" id="modal-booking-detail-content">
+          <!-- Booking details will be loaded here -->
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-primary" id="proceed-payment-btn">
-            <i class="fas fa-credit-card me-2"></i>Proceed to Payment
+          <button type="button" class="btn btn-primary" id="download-ticket-btn" style="display: none;">
+            <i class="fas fa-download me-2"></i>Download Ticket
           </button>
-          <button type="button" class="btn btn-outline-primary" id="view-bookings-btn">
-            <i class="fas fa-list me-2"></i>View My Bookings
+          <button type="button" class="btn btn-success" id="complete-payment-booking-btn" style="display: none;">
+            <i class="fas fa-credit-card me-2"></i>Complete Payment
+          </button>
+          <button type="button" class="btn btn-danger" id="cancel-booking-btn" style="display: none;">
+            <i class="fas fa-times me-2"></i>Cancel Booking
           </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Payment Processing Modal -->
-  <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
+  <!-- Payment Completion Modal -->
+  <div class="modal fade" id="paymentCompletionModal" tabindex="-1" aria-labelledby="paymentCompletionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="paymentModalLabel">
+          <h5 class="modal-title" id="paymentCompletionModalLabel">
             <i class="fas fa-credit-card me-2"></i>Complete Payment
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body" id="modal-payment-content">
-          <!-- Payment form will be loaded here -->
+        <div class="modal-body" id="modal-payment-completion-content">
+          <!-- Payment completion form will be loaded here -->
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-success" id="complete-payment-btn">
-            <i class="fas fa-lock me-2"></i>Complete Payment
+          <button type="button" class="btn btn-success" id="submit-payment-btn">
+            <i class="fas fa-lock me-2"></i>Submit Payment
           </button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Booking Cancellation Modal -->
+  <div class="modal fade" id="cancelBookingModal" tabindex="-1" aria-labelledby="cancelBookingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="cancelBookingModalLabel">
+            <i class="fas fa-exclamation-triangle me-2"></i>Cancel Booking
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-4">
+            <i class="fas fa-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+            <h4 class="mt-3">Are you sure?</h4>
+            <p class="text-muted">This action cannot be undone. Your booking will be cancelled and any payments will be processed for refund according to our cancellation policy.</p>
+          </div>
+          <div class="booking-cancel-details" id="booking-cancel-details">
+            <!-- Booking details for cancellation will be shown here -->
+          </div>
+          <div class="form-group mt-3">
+            <label for="cancellation-reason" class="form-label">Reason for Cancellation (Optional)</label>
+            <textarea class="form-control" id="cancellation-reason" rows="3" placeholder="Please provide a reason for cancellation..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Booking</button>
+          <button type="button" class="btn btn-danger" id="confirm-cancel-booking-btn">
+            <i class="fas fa-times me-2"></i>Yes, Cancel Booking
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer>
     <div class="container">
@@ -420,6 +439,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Custom JS -->
   <script src="/static/js/auth.js"></script>
-  <script src="/static/js/showtimes.js"></script>
+  <script src="/static/js/bookings.js"></script>
 </body>
 </html>

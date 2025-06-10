@@ -241,6 +241,32 @@ class SeatStatusType(ObjectType):
     booking_id = Int()
     updated_at = DateTime()
     
+    # Add camelCase resolvers for JavaScript compatibility
+    showtimeId = Int()
+    seatNumber = String()
+    bookingId = Int()
+    updatedAt = DateTime()
+    
+    def resolve_showtimeId(self, info):
+        if isinstance(self, dict):
+            return self.get('showtimeId') or self.get('showtime_id')
+        return getattr(self, 'showtime_id', None)
+    
+    def resolve_seatNumber(self, info):
+        if isinstance(self, dict):
+            return self.get('seatNumber') or self.get('seat_number')
+        return getattr(self, 'seat_number', None)
+    
+    def resolve_bookingId(self, info):
+        if isinstance(self, dict):
+            return self.get('bookingId') or self.get('booking_id')
+        return getattr(self, 'booking_id', None)
+    
+    def resolve_updatedAt(self, info):
+        if isinstance(self, dict):
+            return self.get('updatedAt') or self.get('updated_at')
+        return getattr(self, 'updated_at', None)
+    
 class TicketType(ObjectType):
     id = Int()
     bookingId = Int()        
@@ -417,6 +443,7 @@ class Query(ObjectType):
     movies = List(MovieType)
     cinemas = List(CinemaType)
     auditoriums = List(AuditoriumType, cinema_id=Int())
+    auditorium = Field(AuditoriumType, id=Int(required=True))
     showtimes = List(ShowtimeType, movie_id=Int(), auditorium_id=Int())
     seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))
     coupons = List(CouponType)
@@ -1448,6 +1475,73 @@ class Query(ObjectType):
         return auditoriums
     
 
+    def resolve_auditorium(self, info, id):
+        """Get single auditorium by ID with seat layout - PUBLIC ACCESS"""
+        query_data = {
+            'query': f'''
+            {{
+                auditorium(id: {id}) {{
+                    id
+                    cinemaId
+                    name
+                    seatLayout
+                    cinema {{
+                        id
+                        name
+                        city
+                    }}
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', 'auditorium')
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        auditorium_data = response['data']
+        if not auditorium_data:
+            raise Exception(f"Auditorium with ID {id} not found")
+        
+        # FIXED: Handle double-encoded seatLayout
+        if auditorium_data and 'seatLayout' in auditorium_data:
+            seat_layout = auditorium_data['seatLayout']
+            
+            # Try to decode double-encoded JSON
+            if isinstance(seat_layout, str):
+                try:
+                    # First decode
+                    decoded_once = json.loads(seat_layout)
+                    
+                    # If it's still a string, decode again
+                    if isinstance(decoded_once, str):
+                        auditorium_data['seatLayout'] = json.loads(decoded_once)
+                        print(f"Double-decoded seatLayout: {auditorium_data['seatLayout']}")
+                    else:
+                        auditorium_data['seatLayout'] = decoded_once
+                        print(f"Single-decoded seatLayout: {auditorium_data['seatLayout']}")
+                        
+                except (json.JSONDecodeError, TypeError) as e:
+                    print(f"Error decoding seatLayout: {e}")
+                    # Keep original value if parsing fails
+        
+        # Transform camelCase response to snake_case for gateway types
+        if auditorium_data:
+            # Transform cinemaId to cinema_id
+            if 'cinemaId' in auditorium_data:
+                auditorium_data['cinema_id'] = auditorium_data.pop('cinemaId')
+            
+            # Transform seatLayout to seat_layout (but keep the decoded object)
+            if 'seatLayout' in auditorium_data:
+                auditorium_data['seat_layout'] = auditorium_data.pop('seatLayout')
+        
+        return auditorium_data
+
+    # Add auditorium field to Query class
+    auditorium = Field(AuditoriumType, id=Int(required=True))
+
     def resolve_showtimes(self, info, movie_id=None, auditorium_id=None):
         print(f"resolve_showtimes called with movie_id={movie_id}, auditorium_id={auditorium_id}")
         
@@ -1601,60 +1695,54 @@ class Query(ObjectType):
         return processed_showtimes
     
 
-    def resolve_seat_statuses(self, info,showtime_id):
-        query_data = {
+    def resolve_seat_statuses(self, info, showtime_id):
+        """Get seat statuses for a showtime - PUBLIC ACCESS"""
+        print(f"resolve_seat_statuses called with showtime_id={showtime_id}")
+        
+        # Get seat statuses directly without authentication requirement
+        seat_status_query = {
             'query': f'''
             {{
                 seatStatuses(showtimeId: {showtime_id}) {{
                     id
-                    showtime_id
-                    seat_number
+                    showtimeId
+                    seatNumber
                     status
-                    booking_id
-                    updated_at
+                    bookingId
+                    updatedAt
                 }}
             }}
             '''
         }
         
-        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        seat_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
         
-        response = handle_service_response(result, 'cinema', 'seatStatuses')
-        if not response['success']:
-            raise Exception(response['error'])
-        return response['data']
-    
-    @require_auth
-    def resolve_user(self, info, current_user, id):
-        """Get single user by ID - users can only see their own profile, admins can see any"""
-        # Regular users can only see their own profile
-        if current_user['role'] != 'ADMIN' and current_user['user_id'] != id:
-            raise Exception("You can only view your own profile")
+        if not seat_result:
+            print("Cinema service unavailable for seat statuses")
+            return []
         
-        query_data = {
-            'query': f'''
-            {{
-                user(id: {id}) {{
-                    id
-                    username
-                    email
-                    role
-                }}
-            }}
-            '''
-        }
+        if seat_result.get('errors'):
+            print(f"Seat status errors: {seat_result['errors']}")
+            return []
         
-        result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
+        seat_statuses = seat_result.get('data', {}).get('seatStatuses', [])
         
-        response = handle_service_response(result, 'user', 'user')
-        if not response['success']:
-            raise Exception(response['error'])
+        # Transform seat statuses to include camelCase fields for JavaScript
+        transformed_statuses = []
+        for status in seat_statuses:
+            transformed_status = {
+                'id': status.get('id'),
+                'showtimeId': status.get('showtimeId'),
+                'seatNumber': status.get('seatNumber'),
+                'status': status.get('status'),
+                'bookingId': status.get('bookingId'),
+                'updatedAt': status.get('updatedAt'),
+                # Remove auditorium field as it's not part of SeatStatusType
+            }
+            transformed_statuses.append(transformed_status)
         
-        user_data = response['data']
-        if not user_data:
-            raise Exception(f"User with ID {id} not found")
-        
-        return user_data
+        print(f"Returning {len(transformed_statuses)} seat statuses")
+        return transformed_statuses
 
 # ============================================================================
 # MUTATION RESOLVERS
