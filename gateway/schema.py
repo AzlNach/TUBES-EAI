@@ -2515,11 +2515,20 @@ class DeleteBooking(Mutation):
         if current_user['role'] != 'ADMIN' and booking_data['userId'] != current_user['user_id']:
             return DeleteResponse(success=False, message="You can only cancel your own bookings")
         
-        # Step 3: Check if booking can be cancelled (only PENDING or PAID bookings can be cancelled)
         if booking_data['status'] == 'CANCELLED':
-            return DeleteResponse(success=False, message="Booking is already cancelled")
+            return DeleteResponse(
+                success=False,
+                message="Booking is already cancelled"
+            )
         
-        # Step 4: Get seat numbers that need to be released back to AVAILABLE
+        # CRITICAL: Only allow cancellation of PENDING bookings
+        if booking_data['status'] != 'PENDING':
+            return DeleteResponse(
+                success=False,
+                message="Only pending bookings can be cancelled. Once payment is made, cancellation is not allowed."
+            )
+            
+        # Step 3: Get seat numbers that need to be released back to AVAILABLE
         seat_status_query = {
             'query': f'''
             {{
@@ -2540,10 +2549,11 @@ class DeleteBooking(Mutation):
             
             # Find seats that belong to this booking
             for seat_status in seat_statuses:
-                if seat_status.get('bookingId') == id and seat_status.get('status') in ['RESERVED', 'BOOKED']:
+                if (seat_status.get('bookingId') == id and 
+                    seat_status.get('status') in ['RESERVED', 'BOOKED']):
                     seats_to_release.append(seat_status.get('seatNumber'))
         
-        # Step 5: Delete the booking (this will also delete associated tickets)
+        # Step 4: Delete the booking (this will also delete associated tickets)
         query_data = {
             'query': '''
             mutation($id: Int!) {
@@ -2566,12 +2576,10 @@ class DeleteBooking(Mutation):
         
         delete_result = result.get('data', {}).get('deleteBooking', {})
         
-        # Step 6: If booking deletion was successful, release the seats back to AVAILABLE
+        # Step 5: If booking deletion was successful, release the seats back to AVAILABLE
         if delete_result.get('success', False):
-            failed_seat_releases = []
-            
             for seat_number in seats_to_release:
-                seat_update_query = {
+                seat_release_query = {
                     'query': '''
                     mutation($showtimeId: Int!, $seatNumber: String!, $status: String!) {
                         updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status) {
@@ -2587,22 +2595,11 @@ class DeleteBooking(Mutation):
                     }
                 }
                 
-                seat_update_result = make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
-                
-                # Log failed seat releases but don't fail the whole operation
-                if not seat_update_result or seat_update_result.get('errors'):
-                    failed_seat_releases.append(seat_number)
-            
-            # Prepare success message
-            success_message = delete_result.get('message', 'Booking cancelled successfully')
-            if seats_to_release:
-                success_message += f" and {len(seats_to_release)} seats released"
-                if failed_seat_releases:
-                    success_message += f" (failed to release seats: {', '.join(failed_seat_releases)})"
+                make_service_request(SERVICE_URLS['cinema'], seat_release_query, 'cinema')
             
             return DeleteResponse(
                 success=True,
-                message=success_message
+                message=f"Booking cancelled successfully. {len(seats_to_release)} seats have been released and are now available."
             )
         else:
             return DeleteResponse(
@@ -2860,32 +2857,10 @@ class CreatePayment(Mutation):
         booking_update_result = make_service_request(SERVICE_URLS['booking'], booking_update_query, 'booking')
         print(f"Booking status update result: {booking_update_result}")  # Debug log
         
-        # Step 8: Create tickets for reserved seats automatically
+        # Step 8: Update seat statuses from RESERVED to BOOKED (tickets already exist)
         if reserved_seats:
-            ticket_query = {
-                'query': '''
-                mutation($bookingId: Int!, $seatNumbers: [String!]!) {
-                    createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
-                        tickets {
-                            id
-                            bookingId
-                            seatNumber
-                        }
-                        success
-                        message
-                    }
-                }
-                ''',
-                'variables': {
-                    'bookingId': bookingId,
-                    'seatNumbers': reserved_seats
-                }
-            }
+            print(f"Updating seat statuses from RESERVED to BOOKED for seats: {reserved_seats}")
             
-            ticket_result = make_service_request(SERVICE_URLS['booking'], ticket_query, 'booking')
-            print(f"Ticket creation result: {ticket_result}")  # Debug log
-            
-            # Update seat statuses from RESERVED to BOOKED after creating tickets
             for seat_number in reserved_seats:
                 seat_update_query = {
                     'query': '''
@@ -2899,13 +2874,14 @@ class CreatePayment(Mutation):
                     'variables': {
                         'showtimeId': booking_data['showtimeId'],
                         'seatNumber': seat_number,
-                        'status': 'BOOKED',
+                        'status': 'BOOKED',  # Change from RESERVED to BOOKED
                         'bookingId': bookingId
                     }
                 }
                 
-                make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
-
+                seat_update_result = make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
+                print(f"Seat {seat_number} status update result: {seat_update_result}")
+                
         # Step 9: Transform payment data properly with final status
         if payment_service_data:
             transformed_payment = {

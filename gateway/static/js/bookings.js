@@ -992,17 +992,15 @@ function createBookingTableRow(booking, index) {
 
 // Get status badge HTML
 function getStatusBadge(status) {
-    const statusConfig = {
-        'PENDING': { class: 'bg-warning text-dark', icon: 'fas fa-clock', text: 'Pending Payment' },
-        'PAID': { class: 'bg-success', icon: 'fas fa-check', text: 'Paid' },
-        'CONFIRMED': { class: 'bg-primary', icon: 'fas fa-check-circle', text: 'Confirmed' },
-        'CANCELLED': { class: 'bg-danger', icon: 'fas fa-times', text: 'Cancelled' },
-        'EXPIRED': { class: 'bg-secondary', icon: 'fas fa-clock', text: 'Expired' }
+    const badges = {
+        'PENDING': '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Pending Payment</span>',
+        'PAID': '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Paid</span>',
+        'CONFIRMED': '<span class="badge bg-primary"><i class="fas fa-ticket-alt me-1"></i>Confirmed</span>',
+        'CANCELLED': '<span class="badge bg-danger"><i class="fas fa-times me-1"></i>Cancelled</span>',
+        'EXPIRED': '<span class="badge bg-secondary"><i class="fas fa-clock me-1"></i>Expired</span>'
     };
     
-    const config = statusConfig[status] || { class: 'bg-secondary', icon: 'fas fa-question', text: status };
-    
-    return `<span class="badge ${config.class}"><i class="${config.icon} me-1"></i>${config.text}</span>`;
+    return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
 }
 
 // Get action buttons based on booking status
@@ -1011,9 +1009,9 @@ function getActionButtons(booking) {
         case 'PENDING':
             return `
                 <button class="btn btn-success btn-sm flex-fill" onclick="completePayment(${booking.id})">
-                    <i class="fas fa-credit-card me-1"></i>Pay
+                    <i class="fas fa-credit-card me-1"></i>Pay Now
                 </button>
-                <button class="btn btn-danger btn-sm" onclick="cancelBooking(${booking.id})" title="Cancel">
+                <button class="btn btn-danger btn-sm" onclick="cancelBooking(${booking.id})" title="Cancel Booking">
                     <i class="fas fa-times"></i>
                 </button>
             `;
@@ -1021,12 +1019,14 @@ function getActionButtons(booking) {
         case 'CONFIRMED':
             return `
                 <button class="btn btn-info btn-sm flex-fill" onclick="downloadTicket(${booking.id})">
-                    <i class="fas fa-download me-1"></i>Ticket
+                    <i class="fas fa-download me-1"></i>Download Ticket
                 </button>
+                <small class="text-success mt-1"><i class="fas fa-check me-1"></i>Payment Complete - Cannot Cancel</small>
             `;
         case 'CANCELLED':
+            return `<small class="text-muted">Booking Cancelled</small>`;
         case 'EXPIRED':
-            return `<small class="text-muted">No actions available</small>`;
+            return `<small class="text-muted">Booking Expired</small>`;
         default:
             return '';
     }
@@ -1350,7 +1350,19 @@ function renderBookingDetailModal(booking) {
     // Show/hide action buttons based on status
     elements.downloadTicketBtn.style.display = ['PAID', 'CONFIRMED'].includes(booking.status) ? 'inline-block' : 'none';
     elements.completePaymentBookingBtn.style.display = booking.status === 'PENDING' ? 'inline-block' : 'none';
-    elements.cancelBookingBtn.style.display = ['PENDING', 'PAID'].includes(booking.status) ? 'inline-block' : 'none';
+    elements.cancelBookingBtn.style.display = booking.status === 'PENDING' ? 'inline-block' : 'none';
+
+    if (booking.status !== 'PENDING') {
+        elements.cancelBookingBtn.innerHTML = '<i class="fas fa-ban me-2"></i>Cannot Cancel (Paid)';
+        elements.cancelBookingBtn.disabled = true;
+        elements.cancelBookingBtn.classList.add('btn-secondary');
+        elements.cancelBookingBtn.classList.remove('btn-danger');
+    } else {
+        elements.cancelBookingBtn.innerHTML = '<i class="fas fa-times me-2"></i>Cancel Booking';
+        elements.cancelBookingBtn.disabled = false;
+        elements.cancelBookingBtn.classList.add('btn-danger');
+        elements.cancelBookingBtn.classList.remove('btn-secondary');
+    }
 }
 
 // Setup booking detail modal listeners
@@ -1367,13 +1379,19 @@ function setupBookingDetailListeners(booking) {
         completePayment(booking.id);
     };
     
-    // Cancel booking button
+    // Cancel booking button - only show for PENDING bookings
     elements.cancelBookingBtn.onclick = function() {
+        if (booking.status !== 'PENDING') {
+            AuthService.showMessage('Only pending bookings can be cancelled. Once payment is made, cancellation is not allowed.', 'warning');
+            return;
+        }
+        
         const modal = bootstrap.Modal.getInstance(elements.bookingDetailModal);
         modal.hide();
         cancelBooking(booking.id);
     };
 }
+
 
 // Complete payment for a booking
 async function completePayment(bookingId) {
@@ -1607,8 +1625,9 @@ async function cancelBooking(bookingId) {
             throw new Error('Booking not found');
         }
         
-        if (!['PENDING', 'PAID'].includes(booking.status)) {
-            throw new Error('Only pending or paid bookings can be cancelled');
+        // UPDATED: Only allow cancellation for PENDING bookings
+        if (booking.status !== 'PENDING') {
+            throw new Error('Only pending bookings can be cancelled. Once payment is made, tickets cannot be cancelled.');
         }
         
         // Show cancellation confirmation modal
@@ -1619,6 +1638,7 @@ async function cancelBooking(bookingId) {
         AuthService.showMessage(`Error: ${error.message}`, 'error');
     }
 }
+
 
 // Show cancellation modal
 function showCancellationModal(booking) {
@@ -1639,8 +1659,15 @@ function showCancellationModal(booking) {
     
     elements.bookingCancelDetails.innerHTML = `
         <div class="cancel-booking-summary">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Important:</strong> Bookings can only be cancelled before payment. Once payment is made, cancellation is not allowed. All associated tickets will be permanently deleted and seats will be made available for other customers.
+            </div>
             <div class="summary-item">
                 <strong>Booking ID:</strong> #${booking.id}
+            </div>
+            <div class="summary-item">
+                <strong>Status:</strong> ${booking.status}
             </div>
             <div class="summary-item">
                 <strong>Movie:</strong> ${booking.showtime?.movie?.title || 'Movie N/A'}
@@ -1655,7 +1682,14 @@ function showCancellationModal(booking) {
                 <strong>Seats:</strong> ${seatNumbers}
             </div>
             <div class="summary-item">
+                <strong>Generated Tickets:</strong> ${booking.tickets ? booking.tickets.length : 0} ticket(s) will be deleted
+            </div>
+            <div class="summary-item">
                 <strong>Amount:</strong> $${(booking.total_price || 0).toFixed(2)}
+            </div>
+            <div class="alert alert-info mt-3">
+                <i class="fas fa-info-circle me-2"></i>
+                After cancellation, the seats will become <strong>AVAILABLE</strong> again for other customers to book.
             </div>
         </div>
     `;
@@ -1741,15 +1775,22 @@ async function downloadTicket(bookingId) {
             return;
         }
         
+        // UPDATED: Only allow download for PAID or CONFIRMED bookings
         if (!['PAID', 'CONFIRMED'].includes(booking.status)) {
-            AuthService.showMessage('Tickets can only be downloaded for paid or confirmed bookings', 'warning');
+            AuthService.showMessage('Tickets can only be downloaded after payment is completed', 'warning');
+            return;
+        }
+        
+        // Check if tickets exist (they should always exist now)
+        if (!booking.tickets || booking.tickets.length === 0) {
+            AuthService.showMessage('No tickets found for this booking. Please contact support.', 'error');
             return;
         }
         
         // Generate ticket content
         const ticketContent = generateTicketContent(booking);
         
-        // Create and download PDF-like content
+        // Create and download ticket
         downloadTicketAsPDF(ticketContent, `ticket-${booking.id}.html`);
         
         AuthService.showMessage('Ticket downloaded successfully!', 'success');

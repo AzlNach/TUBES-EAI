@@ -254,6 +254,13 @@ class DeleteBooking(Mutation):
                     message=f"Booking with ID {id} not found"
                 )
             
+            # CRITICAL: Only allow cancellation of PENDING bookings
+            if booking.status != 'PENDING':
+                return DeleteBookingResponse(
+                    success=False,
+                    message=f"Cannot cancel booking with status '{booking.status}'. Only PENDING bookings can be cancelled."
+                )
+            
             showtime_id = booking.showtime_id
             
             # Get seat numbers from tickets before deleting
@@ -280,16 +287,27 @@ class DeleteBooking(Mutation):
                     }
                 }
                 
-                requests.post(
-                    f"{CINEMA_SERVICE_URL}/graphql",
-                    json=seat_update_query,
-                    timeout=30,
-                    headers={'Content-Type': 'application/json'}
-                )
+                try:
+                    response = requests.post(
+                        f"{CINEMA_SERVICE_URL}/graphql",
+                        json=seat_update_query,
+                        timeout=30,
+                        headers={'Content-Type': 'application/json'}
+                    )
+                    
+                    if response.ok:
+                        response_data = response.json()
+                        if response_data.get('errors'):
+                            print(f"Error releasing seat {seat_number}: {response_data['errors']}")
+                    else:
+                        print(f"Failed to release seat {seat_number}: HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    print(f"Exception releasing seat {seat_number}: {str(e)}")
             
             return DeleteBookingResponse(
                 success=True,
-                message="Booking cancelled successfully"
+                message=f"Booking cancelled successfully. {len(seat_numbers)} seats have been released."
             )
         except Exception as e:
             traceback.print_exc()
