@@ -53,6 +53,17 @@ const MOVIE_QUERIES = {
     `
 };
 
+// ✅ TAMBAH: Book queries untuk adaptasi status
+const BOOK_QUERIES = {
+    GET_BOOKS: `
+        query GetBooks {
+            books {
+                title
+            }
+        }
+    `
+};
+
 // Global state variables
 let allMovies = [];
 let filteredMovies = [];
@@ -66,6 +77,10 @@ let currentFilters = {
     sort: 'title'
 };
 let isLoggedIn = false;
+
+// ✅ TAMBAH: Cache untuk data buku
+let allBooks = [];
+let booksLoaded = false;
 
 // DOM Elements cache
 let elements = {};
@@ -139,8 +154,16 @@ function initializeMoviesPage() {
         // Setup event listeners
         setupEventListeners();
         
-        // Load initial data
-        loadMovies();
+        // Load initial data - books dan movies parallel
+        Promise.all([
+            loadBooks(), // ✅ TAMBAH: Load books untuk adaptasi checking
+            loadMovies()
+        ]).then(() => {
+            console.log('✅ Movies dan books data loaded successfully');
+        }).catch(error => {
+            console.error('Error loading initial data:', error);
+            // Movies masih bisa load meski books gagal
+        });
         
         // Setup view controls
         setupViewControls();
@@ -427,30 +450,36 @@ function renderListView(movies) {
 }
 
 // Create movie card for grid view - DIPERBAIKI: SESUAI DENGAN CSS STYLING
+// ✅ UPDATE: Create movie card dengan adaptation badge
 function createMovieCard(movie, index) {
     const col = document.createElement('div');
     col.className = 'col-lg-4 col-md-6 col-sm-6 mb-4';
     
-    // DIPERBAIKI: Handle posterUrl dari database dengan prioritas
     const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster';
-    
-    // DIPERBAIKI: Handle rating display dengan parsing yang benar
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
     const stars = movie.rating ? '★'.repeat(Math.round(parseFloat(movie.rating) / 2)) : '☆☆☆☆☆';
-    
-    // Handle release date
     const releaseDate = movie.releaseDate || movie.release_date || null;
     const releaseDateDisplay = releaseDate ? new Date(releaseDate).getFullYear() : 'TBD';
-    
-    // DIPERBAIKI: Gunakan logika yang sama dengan main.js untuk button handling
     const buttonOnClick = `onclick="showMovieDetail(${movie.id})"`;
     
-    // DIPERBAIKI: Struktur HTML yang sesuai dengan CSS styling
+    // ✅ TAMBAH: Check adaptation untuk card badge
+    const adaptationInfo = checkBookAdaptation(movie.title);
+    
     col.innerHTML = `
         <div class="card movie-card h-100" data-movie-id="${movie.id}">
             <div class="movie-poster-container position-relative">
                 <img src="${posterUrl}" class="movie-poster" alt="${movie.title}" 
                      onerror="this.src='https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster'">
+                
+                <!-- ✅ TAMBAH: Adaptation Badge on Poster -->
+                ${adaptationInfo.isAdaptation ? `
+                    <div class="position-absolute top-0 start-0 m-2">
+                        <span class="badge bg-success">
+                            <i class="fas fa-book me-1"></i>Book
+                        </span>
+                    </div>
+                ` : ''}
+                
                 <div class="movie-overlay">
                     <button class="btn btn-primary btn-sm movie-quick-view" ${buttonOnClick}>
                         <i class="fas fa-eye me-1"></i>Quick View
@@ -463,7 +492,14 @@ function createMovieCard(movie, index) {
                 </div>
             </div>
             <div class="card-body">
-                <h5 class="card-title">${movie.title}</h5>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title flex-grow-1">${movie.title}</h5>
+                    ${adaptationInfo.isAdaptation ? `
+                        <span class="badge bg-success ms-2" title="Based on book: ${adaptationInfo.matchedBook}">
+                            <i class="fas fa-book"></i>
+                        </span>
+                    ` : ''}
+                </div>
                 <div class="movie-meta">
                     <span class="genre-badge">${movie.genre}</span>
                     <span class="year-badge">${releaseDateDisplay}</span>
@@ -789,14 +825,61 @@ function renderMovieDetailModal(movie) {
     const releaseDate = movie.releaseDate || movie.release_date || null;
     const releaseDateDisplay = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'To be determined';
     
+    // ✅ TAMBAH: Check book adaptation
+    const adaptationInfo = checkBookAdaptation(movie.title);
+    
     elements.modalMovieContent.innerHTML = `
         <div class="row">
             <div class="col-md-4">
                 <img src="${posterUrl}" class="img-fluid rounded shadow" alt="${movie.title}"
                      onerror="this.src='https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster'">
+                
+                ${adaptationInfo.isAdaptation ? `
+                    <!-- ✅ TAMBAH: Book Adaptation Badge -->
+                    <div class="mt-3">
+                        <div class="alert alert-success p-2">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-book me-2"></i>
+                                <div>
+                                    <small class="fw-bold">Book Adaptation</small>
+                                    <br>
+                                    <small class="text-muted">Based on: "${adaptationInfo.matchedBook}"</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
             <div class="col-md-8">
-                <h3 class="movie-title mb-3">${movie.title}</h3>
+                <div class="d-flex align-items-start justify-content-between mb-3">
+                    <h3 class="movie-title mb-0">${movie.title}</h3>
+                    ${adaptationInfo.isAdaptation ? `
+                        <!-- ✅ TAMBAH: Adaptation Status Badge -->
+                        <span class="badge bg-success fs-6 ms-2">
+                            <i class="fas fa-book me-1"></i>Book Adaptation
+                        </span>
+                    ` : ''}
+                </div>
+                
+                <!-- ✅ TAMBAH: Adaptation Info Row jika ada -->
+                ${adaptationInfo.isAdaptation ? `
+                <div class="adaptation-info mb-3">
+                    <div class="card border-success">
+                        <div class="card-body p-3">
+                            <h6 class="card-title text-success mb-2">
+                                <i class="fas fa-book-open me-2"></i>Literary Adaptation
+                            </h6>
+                            <p class="card-text mb-0">
+                                <strong>Original Book:</strong> "${adaptationInfo.matchedBook}"
+                                <br>
+                                <small class="text-muted">
+                                    Match Type: ${adaptationInfo.matchType === 'exact' ? 'Exact Title Match' : 'Partial Title Match'}
+                                </small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
                 
                 <div class="movie-meta mb-4">
                     <div class="row">
@@ -866,6 +949,99 @@ function handleBookMovie() {
     }
 }
 
+// ✅ TAMBAH: Load books untuk adaptasi checking
+async function loadBooks() {
+    if (booksLoaded) return allBooks; // Return cached data jika sudah dimuat
+    
+    try {
+        console.log('Loading books for adaptation checking...');
+        
+        const response = await fetch('http://localhost:9000/graphql', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: BOOK_QUERIES.GET_BOOKS
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.errors) {
+            console.error('Books GraphQL errors:', result.errors);
+            throw new Error(result.errors[0].message);
+        }
+        
+        if (result.data && result.data.books) {
+            allBooks = result.data.books;
+            booksLoaded = true;
+            console.log(`✅ Loaded ${allBooks.length} books for adaptation checking`);
+            return allBooks;
+        } else {
+            console.warn('No books data received');
+            return [];
+        }
+        
+    } catch (error) {
+        console.error('Error loading books:', error);
+        // Return empty array pada error, jangan block movie loading
+        return [];
+    }
+}
+
+// ✅ TAMBAH: Check apakah movie adalah adaptasi dari buku
+function checkBookAdaptation(movieTitle) {
+    if (!movieTitle || allBooks.length === 0) {
+        return { isAdaptation: false, matchedBook: null };
+    }
+    
+    const normalizedMovieTitle = normalizeTitle(movieTitle);
+    
+    // Cari exact match atau partial match
+    const exactMatch = allBooks.find(book => 
+        normalizeTitle(book.title) === normalizedMovieTitle
+    );
+    
+    if (exactMatch) {
+        return { 
+            isAdaptation: true, 
+            matchedBook: exactMatch.title,
+            matchType: 'exact'
+        };
+    }
+    
+    // Cari partial match (movie title mengandung book title atau sebaliknya)
+    const partialMatch = allBooks.find(book => {
+        const normalizedBookTitle = normalizeTitle(book.title);
+        return normalizedMovieTitle.includes(normalizedBookTitle) || 
+               normalizedBookTitle.includes(normalizedMovieTitle);
+    });
+    
+    if (partialMatch) {
+        return { 
+            isAdaptation: true, 
+            matchedBook: partialMatch.title,
+            matchType: 'partial'
+        };
+    }
+    
+    return { isAdaptation: false, matchedBook: null };
+}
+
+// ✅ TAMBAH: Normalize title untuk comparison yang lebih akurat
+function normalizeTitle(title) {
+    return title
+        .toLowerCase()
+        .trim()
+        // Remove common movie/book suffixes
+        .replace(/\s*\(.*\)\s*$/, '') // Remove parentheses content
+        .replace(/\s*:.*$/, '') // Remove subtitle after colon
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .replace(/[^\w\s]/g, '') // Remove special characters
+        .trim();
+}
+
 // DIPERBAIKI: TAMBAHKAN FUNGSI YANG SAMA DENGAN MAIN.JS
 function handleLoginRequired(event, contentType) {
     if (event) event.preventDefault();
@@ -900,11 +1076,15 @@ window.handleMovieBooking = handleMovieBooking;
 window.changePage = changePage;
 window.handleLoginRequired = handleLoginRequired; // DIPERBAIKI: TAMBAHKAN INI
 
-// Export for testing and debugging
+// ✅ UPDATE: Export untuk testing dan debugging dengan fungsi baru
 window.MoviesPage = {
     MOVIE_FIELDS,
     MOVIE_QUERIES,
+    BOOK_QUERIES, // ✅ TAMBAH
     loadMovies,
+    loadBooks, // ✅ TAMBAH
+    checkBookAdaptation, // ✅ TAMBAH
+    normalizeTitle, // ✅ TAMBAH
     renderMovies,
     createMovieCard,
     showMovieDetail,
@@ -915,4 +1095,4 @@ window.MoviesPage = {
     changePage
 };
 
-console.log('Movies.js loaded successfully with full schema consistency');
+console.log('Movies.js loaded successfully with book adaptation feature');

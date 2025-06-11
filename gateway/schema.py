@@ -541,27 +541,31 @@ class Query(ObjectType):
         
         return response['data'] or []
 
-    @require_auth
-    def resolve_movies(self, info, current_user):
-        query_data = {'query': '{ movies { id title genre duration description releaseDate } }'}
+    # ✅ FIX: Remove @require_auth dari resolve_movies
+    def resolve_movies(self, info):
+        """Get movies for display (no auth required)"""
+        query_data = {'query': '{ movies { id title genre duration description releaseDate posterUrl rating } }'}
         result = make_service_request(SERVICE_URLS['movie'], query_data, 'movie')
         
         response = handle_service_response(result, 'movie', 'movies')
         if not response['success']:
-            raise Exception(response['error'])
-        return response['data']
+            print(f"Error fetching movies: {response['error']}")
+            return []
+        return response['data'] or []
 
-
+    # ✅ FIX: Remove authentication requirement dari resolve_cinemas 
     def resolve_cinemas(self, info):
+        """Get cinemas for display (no auth required)"""
         query_data = {'query': '{ cinemas { id name city capacity auditoriums { id name seatLayout } } }'}
         result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
         
         response = handle_service_response(result, 'cinema', 'cinemas')
         if not response['success']:
-            raise Exception(response['error'])
+            print(f"Error fetching cinemas: {response['error']}")
+            return []
         
         # Transform camelCase response to snake_case for gateway types
-        cinemas = response['data']
+        cinemas = response['data'] or []
         if cinemas:
             for cinema in cinemas:
                 # Transform auditoriums nested data
@@ -1382,7 +1386,7 @@ class Query(ObjectType):
     # GET BY ID RESOLVERS
     # ============================================================================
 
-    @require_auth
+
     def resolve_movie(self, info, current_user, id):
         """Get single movie by ID"""
         query_data = {
