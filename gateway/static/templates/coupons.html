@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Coupons - Cinema Booking System</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Custom CSS -->
+  <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container">
+      <a class="navbar-brand" href="/dashboard">
+        <i class="fas fa-film me-2"></i>Cinema
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/dashboard">
+              <i class="fas fa-home me-1"></i> Home
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/movies">
+              <i class="fas fa-video me-1"></i> Movies
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/cinemas">
+              <i class="fas fa-building me-1"></i> Cinemas
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/showtimes">
+              <i class="fas fa-calendar-alt me-1"></i> Showtimes
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/bookings">
+              <i class="fas fa-calendar-check me-1"></i> Bookings
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="/coupons">
+              <i class="fas fa-tags me-1"></i> Coupons
+            </a>
+          </li>
+        </ul>
+        <div class="navbar-nav" id="navbar-auth">
+          <!-- Auth buttons will be dynamically inserted -->
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Header -->
+  <section class="page-header">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-8">
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+              <li class="breadcrumb-item">
+                <a href="/dashboard" class="text-decoration-none">
+                  <i class="fas fa-home me-1"></i>Home
+                </a>
+              </li>
+              <li class="breadcrumb-item active" aria-current="page">My Coupons</li>
+            </ol>
+          </nav>
+          <h1 class="page-title mb-0">
+            <i class="fas fa-tags me-3"></i>My Coupons
+          </h1>
+          <p class="page-subtitle mb-0">Manage your discount coupons and loyalty rewards</p>
+        </div>
+        <div class="col-md-4 text-end">
+          <div class="page-stats">
+            <span class="badge bg-primary fs-6" id="coupon-count">
+              <i class="fas fa-tags me-1"></i>Loading...
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loyalty Progress Section -->
+  <section class="loyalty-section">
+    <div class="container">
+      <div class="card loyalty-card">
+        <div class="card-body">
+          <div class="row align-items-center">
+            <div class="col-md-8">
+              <h5 class="loyalty-title mb-3">
+                <i class="fas fa-trophy me-2"></i>Loyalty Rewards Program
+              </h5>
+              <p class="loyalty-description">
+                Make 3 successful payments to unlock your first loyalty coupon! 
+                Continue making payments to earn more rewards.
+              </p>
+              <div class="loyalty-progress mb-3">
+                <div class="progress-info mb-2">
+                  <span class="progress-label">Progress to next coupon:</span>
+                  <span class="progress-value" id="payment-progress">0 / 3 payments</span>
+                </div>
+                <div class="progress">
+                  <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                       role="progressbar" 
+                       id="loyalty-progress-bar"
+                       style="width: 0%"
+                       aria-valuenow="0" 
+                       aria-valuemin="0" 
+                       aria-valuemax="100">
+                  </div>
+                </div>
+              </div>
+              <div class="loyalty-stats">
+                <div class="stat-item">
+                  <strong id="total-payments-count">0</strong>
+                  <span>Total Payments</span>
+                </div>
+                <div class="stat-item">
+                  <strong id="generated-coupons-count">0</strong>
+                  <span>Coupons Earned</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 text-center">
+              <div class="loyalty-icon">
+                <i class="fas fa-gift fa-4x text-primary"></i>
+              </div>
+              <div class="next-reward mt-3" id="next-reward-info">
+                <small class="text-muted">Next reward at 3 payments</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filter and Search Section -->
+  <section class="filter-section">
+    <div class="container">
+      <div class="card filter-card">
+        <div class="card-body">
+          <div class="row align-items-center">
+            <div class="col-md-3">
+              <label for="status-filter" class="form-label fw-semibold">
+                <i class="fas fa-filter me-2"></i>Filter by Status
+              </label>
+              <select class="form-select" id="status-filter">
+                <option value="">All Coupons</option>
+                <option value="active">Active</option>
+                <option value="used">Used</option>
+                <option value="expired">Expired</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="type-filter" class="form-label fw-semibold">
+                <i class="fas fa-tag me-2"></i>Filter by Type
+              </label>
+              <select class="form-select" id="type-filter">
+                <option value="">All Types</option>
+                <option value="loyalty">Loyalty Rewards</option>
+                <option value="promotional">Promotional</option>
+                <option value="special">Special Offers</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="coupon-search" class="form-label fw-semibold">
+                <i class="fas fa-search me-2"></i>Search Coupons
+              </label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="coupon-search" placeholder="Search by code or name...">
+                <button class="btn btn-outline-primary" type="button" id="clear-search" style="display: none;">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label for="sort-filter" class="form-label fw-semibold">
+                <i class="fas fa-sort me-2"></i>Sort By
+              </label>
+              <select class="form-select" id="sort-filter">
+                <option value="created-desc">Newest First</option>
+                <option value="created-asc">Oldest First</option>
+                <option value="expiry-asc">Expiring Soon</option>
+                <option value="discount-desc">Highest Discount</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-12">
+              <div class="filter-actions">
+                <button type="button" class="btn btn-outline-secondary" id="clear-filters-btn">
+                  <i class="fas fa-eraser me-2"></i>Clear Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading State -->
+  <section class="container mb-5" id="loading-container" style="display: none;">
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading coupons...</span>
+      </div>
+      <p class="mt-3 text-muted">Loading your coupons...</p>
+    </div>
+  </section>
+
+  <!-- Coupons Grid -->
+  <section class="container mb-5" id="coupons-section">
+    <div class="row g-4" id="coupons-grid">
+      <!-- Coupons will be dynamically loaded here -->
+    </div>
+  </section>
+
+  <!-- Empty State -->
+  <section class="container mb-5" id="empty-state" style="display: none;">
+    <div class="text-center py-5">
+      <div class="empty-icon mb-4">
+        <i class="fas fa-tags fa-4x text-muted"></i>
+      </div>
+      <h3 class="text-muted">No Coupons Found</h3>
+      <p class="text-muted mb-4">
+        You don't have any coupons yet. Make 3 successful payments to earn your first loyalty coupon!
+      </p>
+      <a href="/showtimes" class="btn btn-primary">
+        <i class="fas fa-ticket-alt me-2"></i>Book Movie Tickets
+      </a>
+    </div>
+  </section>
+
+  <!-- Error State -->
+  <section class="container mb-5" id="error-state" style="display: none;">
+    <div class="text-center py-5">
+      <div class="error-icon mb-4">
+        <i class="fas fa-exclamation-triangle fa-4x text-danger"></i>
+      </div>
+      <h3 class="text-danger">Error Loading Coupons</h3>
+      <p class="text-muted mb-4" id="error-message">
+        Something went wrong while loading your coupons. Please try again.
+      </p>
+      <button class="btn btn-primary" id="retry-load-btn">
+        <i class="fas fa-redo me-2"></i>Try Again
+      </button>
+    </div>
+  </section>
+
+  <!-- Pagination -->
+  <section class="container mb-5" id="pagination-container" style="display: none;">
+    <div class="row">
+      <div class="col-md-6">
+        <p class="mb-0 text-muted" id="pagination-info">
+          Showing <span id="showing-start">1</span> to <span id="showing-end">12</span> 
+          of <span id="total-coupons">0</span> coupons
+        </p>
+      </div>
+      <div class="col-md-6">
+        <nav aria-label="Coupons pagination">
+          <ul class="pagination justify-content-end mb-0" id="pagination-controls">
+            <!-- Pagination controls will be dynamically generated -->
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- Coupon Detail Modal -->
+  <div class="modal fade" id="couponDetailModal" tabindex="-1" aria-labelledby="couponDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="couponDetailModalLabel">
+            <i class="fas fa-tag me-2"></i>Coupon Details
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="modal-coupon-detail-content">
+          <!-- Coupon details will be loaded here -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="copy-coupon-code-btn" style="display: none;">
+            <i class="fas fa-copy me-2"></i>Copy Code
+          </button>
+          <button type="button" class="btn btn-success" id="use-coupon-btn" style="display: none;">
+            <i class="fas fa-gift me-2"></i>Use Coupon
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use Coupon Modal -->
+  <div class="modal fade" id="useCouponModal" tabindex="-1" aria-labelledby="useCouponModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="useCouponModalLabel">
+            <i class="fas fa-gift me-2"></i>Use Coupon
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="modal-use-coupon-content">
+          <!-- Use coupon form will be loaded here -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success" id="confirm-use-coupon-btn">
+            <i class="fas fa-check me-2"></i>Apply Coupon
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="row gy-4">
+        <div class="col-lg-4 col-md-6">
+          <h5 class="footer-brand">
+            <i class="fas fa-film me-2"></i>Cinema
+          </h5>
+          <p>Your trusted movie ticket booking platform connecting you with the best cinema experiences.</p>
+          <div class="mt-4">
+            <a href="#" class="text-white me-3 fs-5"><i class="fab fa-facebook"></i></a>
+            <a href="#" class="text-white me-3 fs-5"><i class="fab fa-twitter"></i></a>
+            <a href="#" class="text-white me-3 fs-5"><i class="fab fa-instagram"></i></a>
+            <a href="#" class="text-white fs-5"><i class="fab fa-youtube"></i></a>
+          </div>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <h5>Quick Links</h5>
+          <ul class="list-unstyled footer-list">
+            <li><a href="/movies" class="text-white"><i class="fas fa-angle-right me-2"></i>Movies</a></li>
+            <li><a href="/cinemas" class="text-white"><i class="fas fa-angle-right me-2"></i>Cinemas</a></li>
+            <li><a href="/showtimes" class="text-white"><i class="fas fa-angle-right me-2"></i>Showtimes</a></li>
+            <li><a href="/about" class="text-white"><i class="fas fa-angle-right me-2"></i>About Us</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <h5>Support</h5>
+          <ul class="list-unstyled footer-list">
+            <li><a href="/faq" class="text-white"><i class="fas fa-angle-right me-2"></i>FAQ</a></li>
+            <li><a href="/help" class="text-white"><i class="fas fa-angle-right me-2"></i>Help Center</a></li>
+            <li><a href="/privacy" class="text-white"><i class="fas fa-angle-right me-2"></i>Privacy Policy</a></li>
+            <li><a href="/terms" class="text-white"><i class="fas fa-angle-right me-2"></i>Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <h5>Contact</h5>
+          <ul class="list-unstyled footer-list">
+            <li><i class="fas fa-envelope me-2"></i>info@cinema.com</li>
+            <li><i class="fas fa-phone me-2"></i>(123) 456-7890</li>
+            <li><i class="fas fa-map-marker-alt me-2"></i>123 Cinema Street, Movie City</li>
+          </ul>
+        </div>
+      </div>
+      <hr class="footer-divider">
+      <div class="text-center">
+        <p class="mb-0">&copy; 2024 Cinema Booking System. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/coupons.js"></script>
+</body>
+</html>
