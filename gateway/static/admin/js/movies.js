@@ -3,6 +3,14 @@
  * Handles CRUD operations for movies in admin panel
  */
 
+const FALLBACK_IMAGES = {
+    poster: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjZTJlOGYwIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMjI1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjQ3NDhiIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiPk5vIFBvc3RlcjwvdGV4dD4KPHN2Zz4=',
+    
+    small: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNzUiIHZpZXdCb3g9IjAgMCA1MCA3NSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9Ijc1IiBmaWxsPSIjZTJlOGYwIi8+Cjx0ZXh0IHg9IjI1IiB5PSIzNyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY0NzQ4YiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjgiPk5vPC90ZXh0Pgo8dGV4dCB4PSIyNSIgeT0iNDciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM2NDc0OGIiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4Ij5Qb3N0ZXI8L3RleHQ+Cjwvc3ZnPgo=',
+    
+    large: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iMTIwIiB2aWV3Qm94PSIwIDAgODAgMTIwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iMTIwIiBmaWxsPSIjZTJlOGYwIi8+Cjx0ZXh0IHg9IjQwIiB5PSI2MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY0NzQ4YiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIj5ObyBQb3N0ZXI8L3RleHQ+Cjwvc3ZnPgo='
+};
+
 // Global state
 let allMovies = [];
 let filteredMovies = [];
@@ -415,7 +423,8 @@ function createMovieCard(movie) {
     const col = document.createElement('div');
     col.className = 'col-xl-3 col-lg-4 col-md-6 col-sm-6 mb-4';
     
-    const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster';
+    // ✅ FIX: Use reliable fallback instead of via.placeholder.com
+    const posterUrl = movie.posterUrl || movie.poster_url || FALLBACK_IMAGES.poster;
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
     const releaseDate = movie.releaseDate || movie.release_date;
     const formattedDate = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'N/A';
@@ -428,7 +437,7 @@ function createMovieCard(movie) {
             <div class="position-relative">
                 <img src="${posterUrl}" alt="${movie.title}" class="card-img-top" 
                      style="height: 300px; object-fit: cover;"
-                     onerror="this.src='https://via.placeholder.com/300x450/e2e8f0/64748b?text=No+Poster'">
+                     onerror="this.src='${FALLBACK_IMAGES.poster}'">
                 <div class="movie-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
                      style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.3s;">
                     <div class="movie-actions">
@@ -479,7 +488,8 @@ function createMovieCard(movie) {
 function createMovieRow(movie) {
     const row = document.createElement('tr');
     
-    const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/80x120/e2e8f0/64748b?text=No+Poster';
+    // ✅ FIX: Use reliable fallback instead of via.placeholder.com
+    const posterUrl = movie.posterUrl || movie.poster_url || FALLBACK_IMAGES.small;
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
     const releaseDate = movie.releaseDate || movie.release_date || null;
     const releaseDateDisplay = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'TBD';
@@ -487,7 +497,7 @@ function createMovieRow(movie) {
     row.innerHTML = `
         <td>
             <img src="${posterUrl}" alt="${movie.title}" style="width: 50px; height: 75px; object-fit: cover; border-radius: 4px;"
-                 onerror="this.src='https://via.placeholder.com/50x75/e2e8f0/64748b?text=No+Poster'">
+                 onerror="this.src='${FALLBACK_IMAGES.small}'">
         </td>
         <td>
             <div class="fw-semibold">${movie.title}</div>
@@ -1039,7 +1049,8 @@ function hideAllContainers() {
 function createMovieRow(movie) {
     const row = document.createElement('tr');
     
-    const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/80x120/e2e8f0/64748b?text=No+Poster';
+    // ✅ FIX: Use reliable fallback instead of via.placeholder.com
+    const posterUrl = movie.posterUrl || movie.poster_url || FALLBACK_IMAGES.small;
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
     const releaseDate = movie.releaseDate || movie.release_date || null;
     const releaseDateDisplay = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'TBD';
@@ -1047,7 +1058,7 @@ function createMovieRow(movie) {
     row.innerHTML = `
         <td>
             <img src="${posterUrl}" alt="${movie.title}" style="width: 50px; height: 75px; object-fit: cover; border-radius: 4px;"
-                 onerror="this.src='https://via.placeholder.com/50x75/e2e8f0/64748b?text=No+Poster'">
+                 onerror="this.src='${FALLBACK_IMAGES.small}'">
         </td>
         <td>
             <div class="fw-semibold">${movie.title}</div>

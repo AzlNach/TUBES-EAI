@@ -956,6 +956,147 @@ const AdminAuth = {
         throw new Error('Failed to delete coupon');
     },
 
+    // ✅ FIX: Update createMovie method dengan better error handling
+    async createMovie(movieData) {
+        console.log('🎬 AdminAuth.createMovie called with:', movieData);
+        
+        const mutation = `
+            mutation CreateMovie(
+                $title: String!
+                $genre: String!
+                $duration: Int!
+                $rating: Float
+                $releaseDate: String
+                $posterUrl: String
+                $description: String
+            ) {
+                createMovie(
+                    title: $title
+                    genre: $genre
+                    duration: $duration
+                    rating: $rating
+                    releaseDate: $releaseDate
+                    posterUrl: $posterUrl
+                    description: $description
+                ) {
+                    success
+                    message
+                    movie {
+                        id
+                        title
+                        genre
+                        duration
+                        rating
+                        releaseDate
+                        posterUrl
+                        description
+                    }
+                }
+            }
+        `;
+        
+        try {
+            console.log('📤 Sending GraphQL mutation...');
+            const result = await this.graphqlRequest(mutation, movieData, true);
+            console.log('📥 GraphQL result:', result);
+            
+            if (result && result.data && result.data.createMovie) {
+                return result.data.createMovie;
+            } else {
+                const error = result?.errors?.[0]?.message || 'Unknown error occurred';
+                throw new Error(`GraphQL Error: ${error}`);
+            }
+        } catch (error) {
+            console.error('❌ AdminAuth.createMovie error:', error);
+            throw error;
+        }
+    },
+
+    // ✅ FIX: Add updateMovie method without createdAt/updatedAt
+    async updateMovie(movieId, movieData) {
+        const mutation = `
+            mutation UpdateMovie(
+                $id: Int!
+                $title: String
+                $genre: String
+                $duration: Int
+                $rating: Float
+                $releaseDate: String
+                $posterUrl: String
+                $description: String
+            ) {
+                updateMovie(
+                    id: $id
+                    title: $title
+                    genre: $genre
+                    duration: $duration
+                    rating: $rating
+                    releaseDate: $releaseDate
+                    posterUrl: $posterUrl
+                    description: $description
+                ) {
+                    success
+                    message
+                    movie {
+                        id
+                        title
+                        genre
+                        duration
+                        rating
+                        releaseDate
+                        posterUrl
+                        description
+                    }
+                }
+            }
+        `;
+        
+        const variables = {
+            id: movieId,
+            ...movieData
+        };
+        
+        try {
+            const result = await this.graphqlRequest(mutation, variables, true);
+            
+            if (result && result.data && result.data.updateMovie) {
+                return result.data.updateMovie;
+            } else {
+                const error = result?.errors?.[0]?.message || 'Unknown error occurred';
+                throw new Error(`GraphQL Error: ${error}`);
+            }
+        } catch (error) {
+            console.error('❌ AdminAuth.updateMovie error:', error);
+            throw error;
+        }
+    },
+
+    // ✅ FIX: Add deleteMovie method
+    async deleteMovie(movieId) {
+        const mutation = `
+            mutation DeleteMovie($id: Int!) {
+                deleteMovie(id: $id) {
+                    success
+                    message
+                }
+            }
+        `;
+        
+        try {
+            const result = await this.graphqlRequest(mutation, { id: movieId }, true);
+            
+            if (result && result.data && result.data.deleteMovie) {
+                return result.data.deleteMovie;
+            } else {
+                const error = result?.errors?.[0]?.message || 'Unknown error occurred';
+                throw new Error(`GraphQL Error: ${error}`);
+            }
+        } catch (error) {
+            console.error('❌ AdminAuth.deleteMovie error:', error);
+            throw error;
+        }
+    },
+
     // Helper method untuk GraphQL requests
     async graphqlRequest(query, variables = {}, requireAuth = false) {
         const headers = {
@@ -1126,7 +1267,7 @@ const AdminAuth = {
             console.log('=== LOAD ALL DATA START ===');
             
             // Check service health first
-            const servicesHealthy = await this.checkServiceHealth();
+            const servicesHealthy = await checkServiceHealth(); // ✅ Use global function
             if (!servicesHealthy) {
                 throw new Error('Backend services are not responding properly');
             }
@@ -1137,17 +1278,18 @@ const AdminAuth = {
             }
             
             await Promise.all([
-                this.loadCinemas(),
-                this.loadMovies()
+                this.getCinemas(),  // ✅ Use this.getCinemas instead of this.loadCinemas
+                this.getMovies()    // ✅ Use this.getMovies instead of this.loadMovies
             ]);
             
-            this.populateFilters();
             console.log('✅ All initial data loaded successfully');
         } catch (error) {
             console.error('❌ Error loading initial data:', error);
-            this.showErrorMessage(`Failed to load initial data: ${error.message}. Please check if the server is running and try refreshing the page.`);
+            this.showMessage(`Failed to load initial data: ${error.message}. Please check if the server is running and try refreshing the page.`, 'error');
         }
-    }
+    },
+
+    // ... rest of methods ...
 };
 
 // Initialize page
@@ -1423,3 +1565,38 @@ function updateStats(coupons) {
         elements.avgDiscount.textContent = `${avgDiscountValue}%`;
     }
 }
+
+// ✅ FIX: Add checkServiceHealth as a standalone function
+async function checkServiceHealth() {
+    try {
+        console.log('=== CHECKING SERVICE HEALTH ===');
+        
+        // Test basic server connectivity
+        const healthResponse = await fetch('/health', { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        console.log('Health check status:', healthResponse.status);
+        
+        // Test GraphQL endpoint basic response
+        const graphqlTest = await fetch('/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: '{ __typename }',
+                variables: {}
+            })
+        });
+        
+        console.log('GraphQL basic test status:', graphqlTest.status);
+        
+        return graphqlTest.status === 200;
+    } catch (error) {
+        console.error('Service health check failed:', error);
+        return false;
+    }
+}
+
+// ✅ Make it available globally
+window.checkServiceHealth = checkServiceHealth;
