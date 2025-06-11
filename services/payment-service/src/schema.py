@@ -103,6 +103,7 @@ class CreatePayment(Mutation):
         amount = Float(required=True)
         paymentMethod = String()
         paymentProofImage = String()
+        
 
     Output = CreatePaymentResponse
 

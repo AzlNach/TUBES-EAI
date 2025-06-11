@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinema Management - Admin Panel</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/admin/css/admin.css" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <i class="fas fa-crown me-2"></i>
+                    <span>Cinema Admin</span>
+                </div>
+                <button class="btn-close-sidebar d-lg-none" id="closeSidebar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-menu">
+                <div class="menu-section">
+                    <h6 class="menu-title">MAIN</h6>
+                    <a href="/admin" class="menu-item">
+                        <i class="fas fa-home"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <h6 class="menu-title">CONTENT MANAGEMENT</h6>
+                    <a href="/admin/movies" class="menu-item">
+                        <i class="fas fa-film"></i>
+                        <span>Movies</span>
+                    </a>
+                    <div class="menu-item-dropdown">
+                        <a href="/admin/cinemas" class="menu-item active">
+                            <i class="fas fa-building"></i>
+                            <span>Cinema Management</span>
+                            <i class="fas fa-chevron-down dropdown-arrow"></i>
+                        </a>
+                        <div class="dropdown-menu">
+                            <a href="#" class="dropdown-item" onclick="showCreateCinemaModal()">
+                                <i class="fas fa-plus me-2"></i>Add Cinema
+                            </a>
+                            <a href="#" class="dropdown-item" onclick="showCreateAuditoriumModal()">
+                                <i class="fas fa-door-open me-2"></i>Add Auditorium
+                            </a>
+                            <a href="#" class="dropdown-item" onclick="showCreateShowtimeModal()">
+                                <i class="fas fa-calendar-plus me-2"></i>Add Showtime
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item" onclick="showAuditoriumsList()">
+                                <i class="fas fa-list me-2"></i>View Auditoriums
+                            </a>
+                            <a href="#" class="dropdown-item" onclick="showShowtimesList()">
+                                <i class="fas fa-calendar me-2"></i>View Showtimes
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="menu-section">
+                    <h6 class="menu-title">USER MANAGEMENT</h6>
+                    <a href="/admin/users" class="menu-item">
+                        <i class="fas fa-users"></i>
+                        <span>Users</span>
+                     <a href="/admin/payments" class="menu-item">
+                        <i class="fas fa-credit-card"></i>
+                        <span>Payments</span>
+                    </a>
+                    <a href="/admin/coupons" class="menu-item">
+                        <i class="fas fa-tags"></i>
+                        <span>Coupons</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <h6 class="menu-title">ACCOUNT</h6>
+                    <a href="#" class="menu-item" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-wrapper">
+                <div class="content-header">
+                    <h1><i class="fas fa-building"></i> Cinema Management</h1>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-primary" onclick="showCreateCinemaModal()">
+                            <i class="fas fa-plus"></i> Add Cinema
+                        </button>
+                        <button class="btn btn-success" onclick="showCreateAuditoriumModal()">
+                            <i class="fas fa-door-open"></i> Add Auditorium
+                        </button>
+                        <button class="btn btn-info" onclick="showCreateShowtimeModal()">
+                            <i class="fas fa-calendar-plus"></i> Add Showtime
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs mb-4" id="managementTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="cinemas-tab" data-bs-toggle="tab" data-bs-target="#cinemas-pane" type="button" role="tab">
+                            <i class="fas fa-building me-2"></i>Cinemas
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="auditoriums-tab" data-bs-toggle="tab" data-bs-target="#auditoriums-pane" type="button" role="tab">
+                            <i class="fas fa-door-open me-2"></i>Auditoriums
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="showtimes-tab" data-bs-toggle="tab" data-bs-target="#showtimes-pane" type="button" role="tab">
+                            <i class="fas fa-calendar me-2"></i>Showtimes
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="managementTabsContent">
+                    <!-- Cinemas Tab -->
+                    <div class="tab-pane fade show active" id="cinemas-pane" role="tabpanel">
+                        <!-- Filters and Search -->
+                        <div class="filters-section">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="search-cinemas" placeholder="Search cinemas..." onkeyup="filterCinemas()">
+                            </div>
+                            <div class="filter-group">
+                                <select id="city-filter" onchange="filterCinemas()">
+                                    <option value="">All Cities</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Cinemas Grid -->
+                        <div class="cinemas-grid" id="cinemas-grid">
+                            <!-- Cinema cards will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Auditoriums Tab -->
+                    <div class="tab-pane fade" id="auditoriums-pane" role="tabpanel">
+                        <!-- Auditoriums Filters -->
+                        <div class="filters-section">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="search-auditoriums" placeholder="Search auditoriums..." onkeyup="filterAuditoriums()">
+                            </div>
+                            <div class="filter-group">
+                                <select id="auditorium-cinema-filter" onchange="filterAuditoriums()">
+                                    <option value="">All Cinemas</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Auditoriums Grid -->
+                        <div class="auditoriums-grid" id="auditoriums-grid">
+                            <!-- Auditorium cards will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Showtimes Tab -->
+                    <div class="tab-pane fade" id="showtimes-pane" role="tabpanel">
+                        <!-- Showtimes Filters -->
+                        <div class="filters-section">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="search-showtimes" placeholder="Search showtimes..." onkeyup="filterShowtimes()">
+                            </div>
+                            <div class="filter-group">
+                                <select id="showtime-cinema-filter" onchange="filterShowtimes()">
+                                    <option value="">All Cinemas</option>
+                                </select>
+                                <select id="showtime-movie-filter" onchange="filterShowtimes()">
+                                    <option value="">All Movies</option>
+                                </select>
+                                <input type="date" id="showtime-date-filter" onchange="filterShowtimes()">
+                            </div>
+                        </div>
+
+                        <!-- Showtimes Grid -->
+                        <div class="showtimes-grid" id="showtimes-grid">
+                            <!-- Showtime cards will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Cinema Modal -->
+    <div id="cinema-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="cinema-modal-title">Add New Cinema</h3>
+                <span class="close" onclick="closeCinemaModal()">&times;</span>
+            </div>
+            <form id="cinema-form">
+                <div class="form-group">
+                    <label for="cinema-name">Cinema Name *</label>
+                    <input type="text" id="cinema-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="cinema-city">City *</label>
+                    <input type="text" id="cinema-city" required>
+                </div>
+                <div class="form-group">
+                    <label for="cinema-capacity">Total Capacity *</label>
+                    <input type="number" id="cinema-capacity" min="1" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCinemaModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="cinema-save-btn">Save Cinema</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Auditorium Modal -->
+    <div id="auditorium-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="auditorium-modal-title">Add New Auditorium</h3>
+                <span class="close" onclick="closeAuditoriumModal()">&times;</span>
+            </div>
+            <form id="auditorium-form">
+                <div class="form-group">
+                    <label for="auditorium-cinema">Cinema *</label>
+                    <select id="auditorium-cinema" required>
+                        <option value="">Select Cinema</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="auditorium-name">Auditorium Name *</label>
+                    <input type="text" id="auditorium-name" required placeholder="e.g., Studio 1, Theater A">
+                </div>
+                <div class="form-group">
+                    <label for="auditorium-seat-layout">Seat Layout *</label>
+                    <select id="auditorium-seat-layout" required>
+                        <option value="">Select Layout</option>
+                        <option value="Standard">Standard (10x10)</option>
+                        <option value="Premium">Premium (8x12)</option>
+                        <option value="VIP">VIP (6x8)</option>
+                        <option value="IMAX">IMAX (12x15)</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAuditoriumModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="auditorium-save-btn">Save Auditorium</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Showtime Modal -->
+    <div id="showtime-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="showtime-modal-title">Add New Showtime</h3>
+                <span class="close" onclick="closeShowtimeModal()">&times;</span>
+            </div>
+            <form id="showtime-form">
+                <div class="form-group">
+                    <label for="showtime-movie">Movie *</label>
+                    <select id="showtime-movie" required>
+                        <option value="">Select Movie</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="showtime-cinema">Cinema *</label>
+                    <select id="showtime-cinema" required onchange="loadAuditoriumsForCinema()">
+                        <option value="">Select Cinema</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="showtime-auditorium">Auditorium *</label>
+                    <select id="showtime-auditorium" required>
+                        <option value="">Select Auditorium</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="showtime-date">Date *</label>
+                    <input type="date" id="showtime-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="showtime-time">Time *</label>
+                    <input type="time" id="showtime-time" required>
+                </div>
+                <div class="form-group">
+                    <label for="showtime-price">Ticket Price *</label>
+                    <input type="number" id="showtime-price" min="0" step="0.01" required placeholder="50000">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeShowtimeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="showtime-save-btn">Save Showtime</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="delete-message">Are you sure you want to delete this item? This action cannot be undone.</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Admin Auth JS -->
+    <script src="/static/admin/js/auth.js"></script>
+    <!-- Enhanced Cinema Management JS -->
+    <script src="/static/admin/js/cinemas.js"></script>
+</body>
+</html>

@@ -1,17 +1,10 @@
 from graphene import ObjectType, String, Float, Int, List, Field, Mutation, Schema, Boolean
-from models import Coupon, db
+from models import Coupon, UserCouponUsage, UserPaymentCount, db
 from datetime import datetime, timedelta
 import requests
 import os
 import traceback
 import uuid 
-
-# Add missing imports for HTTP requests and error handling
-try:
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-except ImportError:
-    pass
 
 class CouponType(ObjectType):
     id = Int()
@@ -20,6 +13,7 @@ class CouponType(ObjectType):
     discountPercentage = Float()
     validUntil = String()
     isActive = Boolean()
+    stock = Int()
     createdAt = String()
     updatedAt = String()
 
@@ -43,46 +37,46 @@ class CouponType(ObjectType):
         if hasattr(self, 'updated_at') and self.updated_at:
             return self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         return None
-    
+
+class UserEligibilityType(ObjectType):
+    userId = Int()          # ✓ Changed from user_id to userId (camelCase)
+    paymentCount = Int()    # ✓ Changed from payment_count to paymentCount
+    isEligible = Boolean()  # ✓ Changed from is_eligible to isEligible  
+    paymentsNeeded = Int()  # ✓ Changed from payments_needed to paymentsNeeded
+
 class CreateCouponResponse(ObjectType):
     coupon = Field(CouponType)
     success = Boolean()
     message = String()
 
-class UseCouponResponse(ObjectType):
+class RedeemCouponResponse(ObjectType):
     success = Boolean()
     message = String()
-    discount_amount = Float()
-
-class TokenVerificationResponse(ObjectType):
-    valid = Boolean()
-    userId = Int()  # Changed from user_id to userId to match GraphQL conventions
-    role = String()
-    error = String()
+    discountAmount = Float()  # ✓ Changed from discount_amount to discountAmount
+    coupon = Field(CouponType)
 
 class Query(ObjectType):
     coupons = List(CouponType)
-    availableCoupons = List(CouponType)  # ← This should match gateway expectation
+    availableCoupons = List(CouponType)
     coupon = Field(CouponType, id=Int(required=True))
-    validate_coupon = Field(Boolean, code=String(required=True))
+    userEligibility = Field(UserEligibilityType, userId=Int(required=True))  # ✓ Changed from user_id to userId
 
     def resolve_coupons(self, info):
         try:
             return Coupon.query.all()
         except Exception as e:
             print(f"Error in resolve_coupons: {str(e)}")
-            traceback.print_exc()
             return []
 
-    def resolve_availableCoupons(self, info):  # ← This should match the field name
+    def resolve_availableCoupons(self, info):
         try:
             return Coupon.query.filter(
                 Coupon.is_active == True,
-                Coupon.valid_until >= datetime.utcnow()
+                Coupon.valid_until >= datetime.utcnow(),
+                Coupon.stock > 0
             ).all()
         except Exception as e:
             print(f"Error in resolve_available_coupons: {str(e)}")
-            traceback.print_exc()
             return []
 
     def resolve_coupon(self, info, id):
@@ -91,16 +85,22 @@ class Query(ObjectType):
         except Exception as e:
             print(f"Error in resolve_coupon: {str(e)}")
             return None
-
-    def resolve_validate_coupon(self, info, code):
+    
+    def resolve_userEligibility(self, info, userId):  # ✓ Changed parameter name
         try:
-            coupon = Coupon.query.filter_by(code=code).first()
-            if not coupon:
-                return False
-            return coupon.is_active and coupon.valid_until >= datetime.utcnow()
+            payment_record = UserPaymentCount.get_or_create(userId)
+            is_eligible = payment_record.is_eligible_for_coupon()
+            payments_needed = max(0, 3 - (payment_record.payment_count - payment_record.last_coupon_earned))
+            
+            return UserEligibilityType(
+                userId=userId,                    # ✓ Changed field name
+                paymentCount=payment_record.payment_count,  # ✓ Changed field name
+                isEligible=is_eligible,          # ✓ Changed field name
+                paymentsNeeded=payments_needed   # ✓ Changed field name
+            )
         except Exception as e:
-            print(f"Error in resolve_validate_coupon: {str(e)}")
-            return False
+            print(f"Error in resolve_userEligibility: {str(e)}")
+            return None
 
 class CreateCoupon(Mutation):
     class Arguments:
@@ -108,10 +108,11 @@ class CreateCoupon(Mutation):
         name = String(required=True)
         discount_percentage = Float(required=True)
         valid_until = String(required=True)
-
+        stock = Int(required=True)
+    
     Output = CreateCouponResponse
 
-    def mutate(self, info, code, name, discount_percentage, valid_until):
+    def mutate(self, info, code, name, discount_percentage, valid_until, stock):
         try:
             # Check if coupon code already exists
             existing_coupon = Coupon.query.filter_by(code=code).first()
@@ -141,6 +142,7 @@ class CreateCoupon(Mutation):
                 name=name,
                 discount_percentage=discount_percentage,
                 valid_until=valid_until_date,
+                stock=stock,
                 is_active=True
             )
             coupon.save()
@@ -159,237 +161,155 @@ class CreateCoupon(Mutation):
                 message=f"Error creating coupon: {str(e)}"
             )
 
-class UseCoupon(Mutation):
+class RedeemCoupon(Mutation):
     class Arguments:
+        userId = Int(required=True)
         code = String(required=True)
-        booking_amount = Float(required=True)
+        bookingAmount = Float(required=True)
+    
+    Output = RedeemCouponResponse
 
-    Output = UseCouponResponse
-
-    def mutate(self, info, code, booking_amount):
+    def mutate(self, info, userId, code, bookingAmount):
         try:
-            coupon = Coupon.query.filter_by(code=code).first()
+            print(f"DEBUG: RedeemCoupon - userId={userId}, code={code}, amount={bookingAmount}")
+            
+            # Check user eligibility
+            payment_record = UserPaymentCount.get_or_create(userId)
+            print(f"DEBUG: Payment record - count={payment_record.payment_count}, last_coupon={payment_record.last_coupon_earned}")
+            
+            if not payment_record.is_eligible_for_coupon():
+                payments_needed = max(0, 3 - (payment_record.payment_count - payment_record.last_coupon_earned))
+                print(f"DEBUG: User not eligible - needs {payments_needed} more payments")
+                return RedeemCouponResponse(
+                    success=False,
+                    message=f"You need {payments_needed} more payments to redeem a coupon",
+                    discountAmount=0.0,
+                    coupon=None
+                )
+
+            # Find coupon
+            coupon = Coupon.query.filter_by(code=code, is_active=True).first()
+            print(f"DEBUG: Found coupon - {coupon}")
             
             if not coupon:
-                return UseCouponResponse(
+                return RedeemCouponResponse(
                     success=False,
-                    message="Coupon not found",
-                    discount_amount=0.0
+                    message="Coupon not found or inactive",
+                    discountAmount=0.0,
+                    coupon=None
                 )
 
-            if not coupon.is_active:
-                return UseCouponResponse(
-                    success=False,
-                    message="Coupon is not active",
-                    discount_amount=0.0
-                )
-
+            # Check if coupon is still valid
             if coupon.valid_until < datetime.utcnow():
-                return UseCouponResponse(
+                return RedeemCouponResponse(
                     success=False,
                     message="Coupon has expired",
-                    discount_amount=0.0
+                    discountAmount=0.0,
+                    coupon=None
                 )
 
-            # Calculate discount
-            discount_amount = booking_amount * (coupon.discount_percentage / 100)
-
-            return UseCouponResponse(
-                success=True,
-                message=f"Coupon applied successfully. {coupon.discount_percentage}% discount",
-                discount_amount=discount_amount
-            )
-        except Exception as e:
-            traceback.print_exc()
-            return UseCouponResponse(
-                success=False,
-                message=f"Error applying coupon: {str(e)}",
-                discount_amount=0.0
-            )
-
-class GenerateLoyaltyCoupon(Mutation):
-    class Arguments:
-        user_id = Int(required=True)
-        booking_count = Int(required=True)
-
-    Output = CreateCouponResponse
-
-    def mutate(self, info, user_id, booking_count):
-        try:
-            # Generate loyalty coupon based on booking count
-            if booking_count >= 10:
-                discount = 20.0
-                coupon_name = "Platinum Loyalty Coupon"
-            elif booking_count >= 5:
-                discount = 15.0
-                coupon_name = "Gold Loyalty Coupon"
-            elif booking_count >= 3:
-                discount = 10.0
-                coupon_name = "Silver Loyalty Coupon"
-            else:
-                return CreateCouponResponse(
-                    coupon=None,
+            # Check stock
+            if coupon.stock <= 0:
+                return RedeemCouponResponse(
                     success=False,
-                    message="Not enough bookings for loyalty coupon"
+                    message="Coupon is out of stock",
+                    discountAmount=0.0,
+                    coupon=None
                 )
 
-            # Generate unique coupon code
-            coupon_code = f"LOYALTY_{user_id}_{uuid.uuid4().hex[:8].upper()}"
+            # Check if user already used this coupon
+            existing_usage = UserCouponUsage.query.filter_by(
+                user_id=userId,
+                coupon_id=coupon.id
+            ).first()
+            
+            if existing_usage:
+                return RedeemCouponResponse(
+                    success=False,
+                    message="You have already used this coupon",
+                    discountAmount=0.0,
+                    coupon=None
+                )
 
-            # Set expiry to 30 days from now
-            expiry_date = datetime.utcnow() + timedelta(days=30)
+            # ✅ START TRANSACTION
+            try:
+                # Calculate discount
+                discount_amount = (bookingAmount * coupon.discount_percentage) / 100.0
+                print(f"DEBUG: Calculated discount = {discount_amount}")
 
-            coupon = Coupon(
-                code=coupon_code,
-                name=coupon_name,
-                discount_percentage=discount,
-                valid_until=expiry_date,
-                is_active=True
-            )
-            coupon.save()
+                # Record usage
+                usage = UserCouponUsage(
+                    user_id=userId,
+                    coupon_id=coupon.id
+                )
+                db.session.add(usage)
+                print(f"DEBUG: Added usage record")
 
-            return CreateCouponResponse(
-                coupon=coupon,
-                success=True,
-                message=f"Loyalty coupon generated with {discount}% discount"
-            )
+                # Decrease stock
+                coupon.stock -= 1
+                db.session.add(coupon)
+                print(f"DEBUG: Updated stock to {coupon.stock}")
+
+                # Mark coupon as earned
+                payment_record.mark_coupon_earned()
+                print(f"DEBUG: Marked coupon as earned")
+
+                # Commit all changes
+                db.session.commit()
+                print(f"DEBUG: Transaction committed successfully")
+
+                return RedeemCouponResponse(
+                    success=True,
+                    message=f"Coupon redeemed successfully. {coupon.discount_percentage}% discount applied",
+                    discountAmount=discount_amount,
+                    coupon=coupon
+                )
+
+            except Exception as e:
+                db.session.rollback()
+                print(f"ERROR: Transaction failed - {str(e)}")
+                raise e
+
         except Exception as e:
+            print(f"ERROR: RedeemCoupon failed - {str(e)}")
             db.session.rollback()
             traceback.print_exc()
-            return CreateCouponResponse(
-                coupon=None,
+            return RedeemCouponResponse(
                 success=False,
-                message=f"Error generating loyalty coupon: {str(e)}"
+                message=f"Internal error: {str(e)}",
+                discountAmount=0.0,
+                coupon=None
             )
             
-class UpdateCoupon(Mutation):
+class UpdatePaymentCount(Mutation):
     class Arguments:
-        id = Int(required=True)
-        name = String()
-        discount_percentage = Float()
-        valid_until = String()
-        is_active = Boolean()
+        userId = Int(required=True)  # ✓ Changed from user_id to userId
+    
+    Output = UserEligibilityType
 
-    coupon = Field(CouponType)
-
-    def mutate(self, info, id, name=None, discount_percentage=None, valid_until=None, is_active=None):
+    def mutate(self, info, userId):  # ✓ Changed parameter name
         try:
-            coupon = Coupon.query.get(id)
-            if not coupon:
-                raise Exception(f"Coupon with ID {id} not found")
-
-            if name:
-                coupon.name = name
-            if discount_percentage is not None:
-                coupon.discount_percentage = discount_percentage
-            if valid_until:
-                try:
-                    coupon.valid_until = datetime.strptime(valid_until, '%Y-%m-%d %H:%M:%S')
-                except ValueError:
-                    coupon.valid_until = datetime.strptime(valid_until, '%Y-%m-%d')
-            if is_active is not None:
-                coupon.is_active = is_active
-
-            coupon.save()
-            return UpdateCoupon(coupon=coupon)
-        except Exception as e:
-            db.session.rollback()
-            traceback.print_exc()
-            raise Exception(f"Error updating coupon: {str(e)}")
-
-class DeleteCouponResponse(ObjectType):
-    success = Boolean()
-    message = String()
-
-class DeleteCoupon(Mutation):
-    class Arguments:
-        id = Int(required=True)
-
-    Output = DeleteCouponResponse
-
-    def mutate(self, info, id):
-        try:
-            coupon = Coupon.query.get(id)
-            if not coupon:
-                return DeleteCouponResponse(
-                    success=False,
-                    message=f"Coupon with ID {id} not found"
-                )
-
-            coupon.delete()
-            return DeleteCouponResponse(
-                success=True,
-                message=f"Coupon with ID {id} deleted successfully"
-            )
-        except Exception as e:
-            db.session.rollback()
-            traceback.print_exc()
-            return DeleteCouponResponse(
-                success=False,
-                message=f"Error deleting coupon: {str(e)}"
-            )
-
-class VerifyToken(Mutation):
-    class Arguments:
-        token = String(required=True)
-
-    Output = TokenVerificationResponse
-
-    def mutate(self, info, token):
-        try:
-            print(f"Verifying token: {token[:20]}...")  # Debug log (show only first 20 chars)
+            payment_record = UserPaymentCount.get_or_create(userId)
+            payment_record.payment_count += 1
+            payment_record.save()
             
-            result = verify_token(token)
-            if result['valid']:
-                print(f"Token valid for user_id: {result['user_id']}, role: {result['role']}")  # Debug log
-                return TokenVerificationResponse(
-                    valid=True,
-                    userId=result['user_id'],  # Changed to userId
-                    role=result['role']
-                )
-            else:
-                print(f"Token invalid: {result.get('error', 'Unknown error')}")  # Debug log
-                return TokenVerificationResponse(
-                    valid=False,
-                    error=result.get('error', 'Invalid token')
-                )
-        except Exception as e:
-            print(f"Token verification error: {str(e)}")  # Debug log
-            traceback.print_exc()
-            return TokenVerificationResponse(
-                valid=False,
-                error=f"Token verification failed: {str(e)}"
+            is_eligible = payment_record.is_eligible_for_coupon()
+            payments_needed = max(0, 3 - (payment_record.payment_count - payment_record.last_coupon_earned))
+            
+            return UserEligibilityType(
+                userId=userId,                    # ✓ Changed field name
+                paymentCount=payment_record.payment_count,  # ✓ Changed field name
+                isEligible=is_eligible,          # ✓ Changed field name
+                paymentsNeeded=payments_needed   # ✓ Changed field name
             )
-
-    def resolve_verify_token(self, info, token):
-        try:
-            print(f"Resolving verify_token query")  # Debug log
-            result = verify_token(token)
-            if result['valid']:
-                return TokenVerificationResponse(
-                    valid=True,
-                    userId=result['user_id'],  # Changed to userId
-                    role=result['role']
-                )
-            else:
-                return TokenVerificationResponse(
-                    valid=False,
-                    error=result.get('error', 'Invalid token')
-                )
         except Exception as e:
-            print(f"Error in resolve_verify_token: {str(e)}")  # Debug log
+            db.session.rollback()
             traceback.print_exc()
-            return TokenVerificationResponse(
-                valid=False,
-                error=f"Token verification failed: {str(e)}"
-            )
+            return None
 
 class Mutation(ObjectType):
     create_coupon = CreateCoupon.Field()
-    use_coupon = UseCoupon.Field()
-    generate_loyalty_coupon = GenerateLoyaltyCoupon.Field()
-    update_coupon = UpdateCoupon.Field()
-    delete_coupon = DeleteCoupon.Field()
-    verify_token = VerifyToken.Field()
+    redeem_coupon = RedeemCoupon.Field()
+    update_payment_count = UpdatePaymentCount.Field()
 
 schema = Schema(query=Query, mutation=Mutation)

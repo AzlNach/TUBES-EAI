@@ -58,36 +58,10 @@ class ShowtimeType(ObjectType):
 
 class SeatStatusType(ObjectType):
     id = Int()
-    showtimeId = Int()  # Changed to camelCase for consistency
-    seatNumber = String()  # Changed to camelCase for consistency
+    showtime_id = Int()
+    seat_number = String()
     status = String()
-    bookingId = Int()  # Changed to camelCase for consistency
-    updatedAt = String()  # Changed to String for consistency
-    showtime = Field(ShowtimeType)
-
-    def resolve_showtimeId(self, info):
-        """Resolve showtime_id field to camelCase showtimeId"""
-        return getattr(self, 'showtime_id', None)
-    
-    def resolve_seatNumber(self, info):
-        """Resolve seat_number field to camelCase seatNumber"""
-        return getattr(self, 'seat_number', None)
-    
-    def resolve_bookingId(self, info):
-        """Resolve booking_id field to camelCase bookingId"""
-        return getattr(self, 'booking_id', None)
-    
-    def resolve_updatedAt(self, info):
-        """Resolve updated_at field to camelCase updatedAt and convert to string"""
-        updated_at = getattr(self, 'updated_at', None)
-        if updated_at:
-            if hasattr(updated_at, 'isoformat'):
-                return updated_at.isoformat()
-            return str(updated_at)
-        return None
-
-    def resolve_showtime(self, info):
-        return self.showtime
+    booking_id = Int()
 
 # Response Types
 class CreateCinemaResponse(ObjectType):
@@ -118,7 +92,7 @@ class DeleteResponse(ObjectType):
 class CreateCinema(Mutation):
     class Arguments:
         name = String(required=True)
-        city = String(required=True)  # Changed from location to city
+        city = String(required=True)
         capacity = Int()
 
     Output = CreateCinemaResponse
@@ -145,7 +119,7 @@ class UpdateCinema(Mutation):
     class Arguments:
         id = Int(required=True)
         name = String()
-        city = String()  # Changed from location to city
+        city = String()
         capacity = Int()
 
     Output = CreateCinemaResponse
@@ -159,16 +133,15 @@ class UpdateCinema(Mutation):
                     success=False,
                     message=f"Cinema with ID {id} not found"
                 )
-                
+
             if name:
                 cinema.name = name
             if city:
                 cinema.city = city
-            if capacity:
+            if capacity is not None:
                 cinema.capacity = capacity
                 
             cinema.save()
-            
             return CreateCinemaResponse(
                 cinema=cinema,
                 success=True,

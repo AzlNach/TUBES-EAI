@@ -120,6 +120,40 @@ def index():
     </body>
     </html>
     '''
+# Admin routes
+@app.route('/admin')
+def admin_dashboard():
+    return send_file('./static/admin/templates/dashboard.html')
+
+@app.route('/admin/movies')
+def admin_movies():
+    return send_file('./static/admin/templates/movies.html')
+
+@app.route('/admin/cinemas') 
+def admin_cinemas():
+    return send_file('./static/admin/templates/cinemas.html')
+
+@app.route('/admin/users')
+def admin_users():
+    return send_file('./static/admin/templates/users.html')
+
+@app.route('/admin/bookings')
+def admin_bookings():
+    return send_file('./static/admin/templates/bookings.html')
+
+@app.route('/admin/login')
+def admin_login():
+    return send_file('./static/admin/templates/login.html')
+
+# Tambahkan route untuk payments page
+@app.route('/admin/payments')
+def admin_payments():
+    return send_file('./static/admin/templates/payments.html')
+
+# Tambahkan route untuk coupons page
+@app.route('/admin/coupons')
+def admin_coupons():
+    return send_file('./static/admin/templates/coupons.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
