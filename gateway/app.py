@@ -155,5 +155,9 @@ def admin_payments():
 def admin_coupons():
     return send_file('./static/admin/templates/coupons.html')
 
+@app.route('/menus')
+def menus_page():
+    return send_file('./static/templates/menus.html')
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

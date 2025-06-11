@@ -177,7 +177,7 @@ services:
       PMA_PASSWORD: password
       MYSQL_ROOT_PASSWORD: rootpassword
     ports:
-      - "8080:80"  # Only for development
+       - "8081:80" # Only for development
     networks:
       - cinema-network
     depends_on:
