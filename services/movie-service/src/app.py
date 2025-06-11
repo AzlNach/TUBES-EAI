@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS
 from models import Movie, db
 from schema import schema
 import os
@@ -10,11 +11,53 @@ from datetime import datetime
 import traceback
 
 app = Flask(__name__)
+
+# Configure CORS - letakkan setelah Flask app creation
+CORS(app, 
+     origins=[
+         "http://localhost:5000",  # Gateway
+         "http://localhost:3000",  # Frontend dev server (jika ada)
+         "http://localhost:8080",  # Alternative frontend port
+         "http://127.0.0.1:5000",
+         "http://127.0.0.1:3000",
+         "http://127.0.0.1:8080"
+     ],
+     allow_headers=[
+         "Content-Type",
+         "Authorization", 
+         "Access-Control-Allow-Credentials",
+         "Access-Control-Allow-Origin",
+         "Access-Control-Allow-Headers",
+         "Access-Control-Allow-Methods"
+     ],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True
+)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'mysql+pymysql://user:password@mysql-server/movie_db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize db with app
 db.init_app(app)
+
+# CORS headers untuk semua response
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
+
+# Handle preflight requests
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
 
 def wait_for_db():
     """Wait for database to be ready"""
@@ -41,6 +84,28 @@ def wait_for_db():
 
 # Wait for database before starting
 wait_for_db()
+
+# Health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Test database connection
+        with app.app_context():
+            db.session.execute('SELECT 1')
+        return jsonify({
+            'status': 'healthy',
+            'service': 'movie-service',
+            'version': '1.0.0',
+            'database': 'connected'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'service': 'movie-service',
+            'version': '1.0.0',
+            'database': 'disconnected',
+            'error': str(e)
+        }), 500
 
 # GraphQL Types
 class MovieType(ObjectType):
@@ -327,17 +392,56 @@ class Mutation(ObjectType):
 
 schema = Schema(query=Query, mutation=Mutation)
 
-@app.route('/graphql', methods=['POST', 'GET'])
+# GraphQL endpoint dengan CORS headers
+@app.route('/graphql', methods=['POST', 'GET', 'OPTIONS'])
 def graphql_endpoint():
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response
+    
     if request.method == 'POST':
-        data = request.get_json()
-        query = data.get('query')
-        variables = data.get('variables')
-        result = schema.execute(query, variables=variables)
-        return jsonify({
-            'data': result.data,
-            'errors': [str(error) for error in result.errors] if result.errors else None
-        })
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'errors': ['No JSON data provided']
+                }), 400
+                
+            query = data.get('query')
+            variables = data.get('variables')
+            
+            if not query:
+                return jsonify({
+                    'errors': ['No query provided']
+                }), 400
+            
+            result = schema.execute(query, variables=variables)
+            
+            response_data = {
+                'data': result.data,
+                'errors': [str(error) for error in result.errors] if result.errors else None
+            }
+            
+            response = jsonify(response_data)
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+            
+            return response
+            
+        except Exception as e:
+            traceback.print_exc()
+            response = jsonify({
+                'data': None,
+                'errors': [f'Internal server error: {str(e)}']
+            })
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response, 500
+            
     elif request.method == 'GET':
         # Return GraphiQL interface with compatible React versions
         return '''

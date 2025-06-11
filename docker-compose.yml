@@ -76,6 +76,9 @@ services:
     #   - "3010:3010"
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql-server/movie_db
+      # ✅ TAMBAH: CORS configuration
+      - CORS_ORIGINS=http://localhost:5000,http://127.0.0.1:5000,http://localhost:3000
+      - FLASK_ENV=development
     networks:
       - cinema-network
     depends_on:
