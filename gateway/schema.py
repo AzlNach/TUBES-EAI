@@ -3096,6 +3096,7 @@ class CreatePayment(Mutation):
             
             print(f"=== PAYMENT DEBUG END ===")
        
+            # ✅ FIXED - Hanya satu message parameter:
             return CreatePaymentResponse(
                 payment={
                     'id': payment_data['payment']['id'],
@@ -3103,9 +3104,8 @@ class CreatePayment(Mutation):
                     'status': 'success'
                 },
                 success=True,
-                message=f"Payment successful! Booking confirmed with {len(reserved_seats)} tickets (already generated during booking)."
                 message=success_message
-
+            )
             
 class DeletePayment(Mutation):
     class Arguments:
