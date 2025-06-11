@@ -3314,8 +3314,27 @@ class CreateAuditorium(Mutation):
 
     @require_admin
     def mutate(self, info, current_user, cinema_id, name, seat_layout=None):
-        
-        if isinstance(seat_layout, dict):
+        # ✅ FIXED: Convert seat_layout string to proper JSON format
+        if isinstance(seat_layout, str):
+            # Convert simple string to JSON object that cinema-service expects
+            seat_layout_json = {
+                "layout_type": seat_layout,
+                "rows": 10 if seat_layout == "Standard" else 8 if seat_layout == "Premium" else 6 if seat_layout == "VIP" else 12,
+                "seats_per_row": 10 if seat_layout == "Standard" else 12 if seat_layout == "Premium" else 8 if seat_layout == "VIP" else 15,
+                "seats": []
+            }
+            
+            # Generate seat numbers based on layout type
+            rows = seat_layout_json["rows"]
+            seats_per_row = seat_layout_json["seats_per_row"]
+            
+            for row in range(rows):
+                row_letter = chr(65 + row)  # A, B, C, etc.
+                for seat in range(1, seats_per_row + 1):
+                    seat_layout_json["seats"].append(f"{row_letter}{seat}")
+            
+            seat_layout = json.dumps(seat_layout_json)
+        elif isinstance(seat_layout, dict):
             seat_layout = json.dumps(seat_layout)
             
         query_data = {
@@ -3358,13 +3377,14 @@ class CreateAuditorium(Mutation):
         
         create_result = result.get('data', {}).get('createAuditorium', {})
         auditorium_data = create_result.get('auditorium')
+        
         if auditorium_data:
             # Transform camelCase response to snake_case for gateway AuditoriumType
             transformed_auditorium = {
                 'id': auditorium_data.get('id'),
-                'cinema_id': auditorium_data.get('cinemaId'),  # Transform camelCase to snake_case
+                'cinema_id': auditorium_data.get('cinemaId'),
                 'name': auditorium_data.get('name'),
-                'seat_layout': auditorium_data.get('seatLayout'),  # Transform camelCase to snake_case
+                'seat_layout': auditorium_data.get('seatLayout'),
                 'cinema': auditorium_data.get('cinema')
             }
             

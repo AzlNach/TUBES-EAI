@@ -33,7 +33,7 @@ body {
   width: var(--sidebar-width);
   height: 100vh;
   background: linear-gradient(135deg, var(--admin-secondary) 0%, var(--admin-dark) 100%);
-  z-index: 1000;
+  z-index: 1040;
   transition: all 0.3s ease;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 }
@@ -128,6 +128,7 @@ body {
   margin-left: var(--sidebar-width);
   min-height: 100vh;
   transition: all 0.3s ease;
+  z-index: 1;
 }
 
 /* Topbar */
@@ -205,6 +206,7 @@ body {
   border-left: 4px solid;
   position: relative;
   overflow: hidden;
+  animation: fadeInUp 0.5s ease forwards;
 }
 
 .stat-card::before {
@@ -395,10 +397,6 @@ body {
   display: flex;
   gap: 0.5rem;
 }
-
-
-
-
 
 /* Cinema Management Styles */
 .cinemas-grid {
@@ -617,35 +615,51 @@ body {
 .modal {
     display: none;
     position: fixed;
-    z-index: 1000;
+    z-index: 9999; /* ✅ TAMBAH: z-index yang lebih tinggi */
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    overflow: auto;
     background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(2px);
+}
+
+.modal.show {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-content {
     background-color: white;
-    margin: 5% auto;
-    border-radius: 12px;
+    margin: auto;
+    padding: 0;
+    border-radius: 8px;
     width: 90%;
-    max-width: 500px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-    animation: modalSlideIn 0.3s ease;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 10000; /* ✅ TAMBAH: z-index yang lebih tinggi */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-@keyframes modalSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-50px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* ✅ FIX: Bootstrap modal override */
+.modal-backdrop {
+    z-index: 9998 !important;
+}
+
+.modal-dialog {
+    z-index: 10001 !important;
+}
+
+/* ✅ FIX: Sidebar tidak menghalangi modal */
+.sidebar {
+    z-index: 1040;
+}
+
+.main-content {
+    z-index: 1;
 }
 
 .modal-header {
@@ -752,6 +766,86 @@ body {
     border-color: #dc2626;
 }
 
+/* ✅ COUPON SPECIFIC STYLES */
+.coupon-code-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+.discount-badge {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.coupon-preview-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-top: 0.5rem;
+}
+
+.coupon-preview-large {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 2px dashed #dee2e6;
+}
+
+/* Enhanced table styling for coupons */
+.table td {
+    vertical-align: middle;
+}
+
+.coupon-checkbox {
+    transform: scale(1.2);
+    margin: 0;
+}
+
+/* Modal enhancements */
+.modal-body .form-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--admin-primary);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+/* Alert styling for preview */
+.alert-info {
+    background-color: #e7f3ff;
+    border-color: #b3d7ff;
+    color: #0c5460;
+}
+
+/* Stats cards hover effect */
+.card.bg-primary:hover,
+.card.bg-success:hover,
+.card.bg-warning:hover,
+.card.bg-info:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+
+/* Button group spacing */
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .cinemas-grid {
@@ -772,86 +866,20 @@ body {
         align-items: stretch;
         gap: 1rem;
     }
-}
-
-
-
-
-/* Forms */
-.form-control, .form-select {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  transition: all 0.3s ease;
-}
-
-.form-control:focus, .form-select:focus {
-  border-color: var(--admin-primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-/* Buttons */
-.btn {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn-primary {
-  background: var(--admin-primary);
-  border-color: var(--admin-primary);
-}
-
-.btn-primary:hover {
-  background: #5b5fc7;
-  border-color: #5b5fc7;
-  transform: translateY(-2px);
-}
-
-/* Pagination */
-.pagination .page-link {
-  border: none;
-  color: var(--admin-secondary);
-  padding: 0.75rem 1rem;
-  margin: 0 0.25rem;
-  border-radius: 8px;
-}
-
-.pagination .page-item.active .page-link {
-  background: var(--admin-primary);
-  color: white;
-}
-
-/* Empty and Error States */
-.empty-state, .error-state {
-  background: white;
-  border-radius: 12px;
-  padding: 3rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  
-  .sidebar.show {
-    transform: translateX(0);
-  }
-  
-  .main-content {
-    margin-left: 0;
-  }
-  
-  .topbar {
-    padding: 0 1rem;
-  }
-  
-  .content-wrapper {
-    padding: 1rem;
-  }
+    
+    .coupon-code-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    .discount-badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    .btn-group .btn {
+        padding: 0.2rem 0.4rem;
+    }
 }
 
 /* Scrollbar Styles */
@@ -891,3 +919,65 @@ body {
 .stat-card:nth-child(2) { animation-delay: 0.2s; }
 .stat-card:nth-child(3) { animation-delay: 0.3s; }
 .stat-card:nth-child(4) { animation-delay: 0.4s; }
+/* ✅ FIX: Movies Modal specific styles */
+.modal {
+    z-index: 9999 !important;
+}
+
+.modal-backdrop {
+    z-index: 9998 !important;
+}
+
+.modal-dialog {
+    z-index: 10000 !important;
+}
+
+/* ✅ FIX: Make sure modals appear above everything */
+#addMovieModal,
+#editMovieModal, 
+#deleteMovieModal {
+    z-index: 10001 !important;
+}
+
+#addMovieModal .modal-dialog,
+#editMovieModal .modal-dialog,
+#deleteMovieModal .modal-dialog {
+    z-index: 10002 !important;
+}
+
+/* ✅ FIX: Admin content z-index */
+.admin-content {
+    z-index: 1;
+}
+
+.topbar {
+    z-index: 1040;
+}
+
+/* ✅ FIX: Form validation styles */
+.is-invalid {
+    border-color: #dc3545 !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='m5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right calc(0.375em + 0.1875rem) center !important;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem) !important;
+}
+
+.invalid-feedback {
+    display: block !important;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+    color: #dc3545;
+}
+
+/* ✅ FIX: Button loading states */
+.btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}

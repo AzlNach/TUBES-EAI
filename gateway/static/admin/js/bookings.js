@@ -1,5 +1,3 @@
-
-
 // Global variables
 let allBookings = [];
 let filteredBookings = [];
@@ -28,13 +26,13 @@ function initializePage() {
 
 function cacheElements() {
     elements = {
-        // Containers
-        loadingContainer: document.getElementById('bookings-loading'),
+        // ✅ FIX: Update element IDs sesuai HTML
+        loadingContainer: document.getElementById('loading-container'),
         bookingsTableContainer: document.getElementById('bookings-table-container'),
         bookingsTableBody: document.getElementById('bookings-table-body'),
-        emptyState: document.getElementById('bookings-empty-state'),
-        errorState: document.getElementById('bookings-error-state'),
-        errorMessage: document.getElementById('bookings-error-message'),
+        emptyState: document.getElementById('empty-state'),
+        errorState: document.getElementById('error-state'), 
+        errorMessage: document.getElementById('error-message'),
         
         // Filters
         statusFilter: document.getElementById('status-filter'),
@@ -128,13 +126,13 @@ function applyFilters() {
     filteredBookings = allBookings.filter(booking => {
         const matchesSearch = !searchTerm || 
             booking.id.toString().includes(searchTerm) ||
-            booking.movie?.title?.toLowerCase().includes(searchTerm) ||
-            booking.auditorium?.cinema?.name?.toLowerCase().includes(searchTerm);
+            booking.userId.toString().includes(searchTerm) ||
+            booking.showtimeId.toString().includes(searchTerm);
             
         const matchesStatus = !selectedStatus || booking.status === selectedStatus;
         
         const matchesDate = !selectedDate || 
-            booking.booking_time?.startsWith(selectedDate);
+            booking.bookingDate?.startsWith(selectedDate);
         
         return matchesSearch && matchesStatus && matchesDate;
     });
@@ -171,25 +169,22 @@ function renderBookings(bookings) {
 function createBookingRow(booking) {
     const row = document.createElement('tr');
     
-    const bookingDate = booking.booking_time ? 
-        new Date(booking.booking_time).toLocaleDateString() : 'N/A';
-    
-    const movieTitle = booking.movie?.title || 'Unknown Movie';
-    const cinemaName = booking.auditorium?.cinema?.name || 'Unknown Cinema';
-    const auditoriumName = booking.auditorium?.name || 'Unknown Auditorium';
+    // ✅ FIX: Gunakan field names yang benar dari response
+    const bookingDate = booking.bookingDate ? 
+        new Date(booking.bookingDate).toLocaleDateString() : 'N/A';
     
     const statusClass = {
         'PAID': 'success',
-        'PENDING': 'warning',
+        'PENDING': 'warning', 
         'CANCELLED': 'danger'
     }[booking.status] || 'secondary';
     
     row.innerHTML = `
         <td>#${booking.id}</td>
-        <td>${movieTitle}</td>
-        <td>${cinemaName} - ${auditoriumName}</td>
-        <td>${booking.seat_numbers || 'N/A'}</td>
-        <td>$${booking.total_price || '0.00'}</td>
+        <td>User ID: ${booking.userId || 'N/A'}</td>
+        <td>Showtime ID: ${booking.showtimeId || 'N/A'}</td>
+        <td>Seats: ${booking.seatNumbers || 'N/A'}</td>
+        <td>$${booking.totalPrice || '0.00'}</td>
         <td><span class="badge bg-${statusClass}">${booking.status}</span></td>
         <td>${bookingDate}</td>
         <td>
@@ -197,14 +192,6 @@ function createBookingRow(booking) {
                 <button type="button" class="btn btn-outline-info" onclick="viewBooking(${booking.id})" title="View Details">
                     <i class="fas fa-eye"></i>
                 </button>
-                ${booking.status === 'PENDING' ? `
-                <button type="button" class="btn btn-outline-success" onclick="updateBookingStatus(${booking.id}, 'PAID')" title="Mark as Paid">
-                    <i class="fas fa-check"></i>
-                </button>
-                <button type="button" class="btn btn-outline-danger" onclick="updateBookingStatus(${booking.id}, 'CANCELLED')" title="Cancel">
-                    <i class="fas fa-times"></i>
-                </button>
-                ` : ''}
             </div>
         </td>
     `;
@@ -285,13 +272,12 @@ function viewBooking(bookingId) {
 Booking Details:
 
 ID: ${booking.id}
-Movie: ${booking.movie?.title || 'Unknown'}
-Cinema: ${booking.auditorium?.cinema?.name || 'Unknown'}
-Auditorium: ${booking.auditorium?.name || 'Unknown'}
-Seats: ${booking.seat_numbers || 'N/A'}
-Total Price: $${booking.total_price || '0.00'}
+User ID: ${booking.userId || 'N/A'}
+Showtime ID: ${booking.showtimeId || 'N/A'}
+Seats: ${booking.seatNumbers || 'N/A'}
+Total Price: $${booking.totalPrice || '0.00'}
 Status: ${booking.status}
-Booking Date: ${booking.booking_time ? new Date(booking.booking_time).toLocaleString() : 'N/A'}
+Booking Date: ${booking.bookingDate ? new Date(booking.bookingDate).toLocaleString() : 'N/A'}
         `;
         alert(details);
     }

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coupons Management - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="/static/admin/css/admin.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <i class="fas fa-crown me-2"></i>
+                <span>Cinema Admin</span>
+            </div>
+        </div>
+        
+        <div class="sidebar-menu">
+            <div class="menu-section">
+                <h6 class="menu-title">MAIN</h6>
+                <a href="/admin" class="menu-item">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+            
+            <div class="menu-section">
+                <h6 class="menu-title">CONTENT MANAGEMENT</h6>
+                <a href="/admin/movies" class="menu-item">
+                    <i class="fas fa-film"></i>
+                    <span>Movies</span>
+                </a>
+                <a href="/admin/cinemas" class="menu-item">
+                    <i class="fas fa-building"></i>
+                    <span>Cinemas</span>
+                </a>
+            </div>
+            
+            <div class="menu-section">
+                <h6 class="menu-title">USER MANAGEMENT</h6>
+                <a href="/admin/users" class="menu-item">
+                    <i class="fas fa-users"></i>
+                    <span>Users</span>
+                </a>
+                <a href="/admin/bookings" class="menu-item">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Bookings</span>
+                </a>
+                <a href="/admin/payments" class="menu-item">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Payments</span>
+                </a>
+                <a href="/admin/coupons" class="menu-item active">
+                    <i class="fas fa-tags"></i>
+                    <span>Coupons</span>
+                </a>
+            </div>
+            
+            <div class="menu-section">
+                <h6 class="menu-title">ACCOUNT</h6>
+                <a href="#" class="menu-item" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <nav class="topbar">
+            <div class="topbar-left">
+                <h4 class="page-title mb-0">Coupons Management</h4>
+            </div>
+            <div class="topbar-right">
+                <button class="btn btn-success" onclick="showCreateCouponModal()">
+                    <i class="fas fa-plus me-2"></i>Create Coupon
+                </button>
+                <button class="btn btn-primary" onclick="refreshCoupons()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+            </div>
+        </nav>
+
+        <div class="content-wrapper">
+            <!-- Stats Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 id="total-coupons-count">0</h4>
+                                    <p>Total Coupons</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-tags fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 id="active-coupons-count">0</h4>
+                                    <p>Active Coupons</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 id="used-coupons-count">0</h4>
+                                    <p>Used Coupons</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-shopping-cart fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 id="avg-discount">0%</h4>
+                                    <p>Avg Discount</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-percentage fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-2">
+                            <select class="form-select" id="coupon-status-filter">
+                                <option value="">All Status</option>
+                                <option value="true">Active</option>
+                                <option value="false">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="coupon-type-filter">
+                                <option value="">All Types</option>
+                                <option value="5">5% Discount</option>
+                                <option value="10">10% Discount</option>
+                                <option value="15">15% Discount</option>
+                                <option value="20">20% Discount</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="coupon-search-input" placeholder="Search coupons...">
+                                <button class="btn btn-outline-secondary" type="button" id="coupon-clear-search">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-success" onclick="exportCoupons()">
+                                    <i class="fas fa-download me-1"></i>Export
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="bulkDeactivate()">
+                                    <i class="fas fa-ban me-1"></i>Bulk Deactivate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coupons Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h5>All Coupons</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Loading State -->
+                    <div class="text-center py-5" id="coupons-loading-container">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-3">Loading coupons...</p>
+                    </div>
+
+                    <!-- Coupons Table -->
+                    <div class="table-responsive" id="coupons-table-container" style="display: none;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" id="select-all-coupons">
+                                    </th>
+                                    <th>Code</th>
+                                    <th>Name</th>
+                                    <th>Discount</th>
+                                    <th>Stock</th>
+                                    <th>Used</th>
+                                    <th>Valid Until</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coupons-table-body">
+                                <!-- Coupons will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div class="text-center py-5" id="coupons-empty-state" style="display: none;">
+                        <i class="fas fa-tags fa-3x text-muted mb-3"></i>
+                        <h5>No coupons found</h5>
+                        <p class="text-muted">Create your first coupon to get started.</p>
+                        <button class="btn btn-success" onclick="showCreateCouponModal()">
+                            <i class="fas fa-plus me-2"></i>Create Coupon
+                        </button>
+                    </div>
+
+                    <!-- Error State -->
+                    <div class="text-center py-5" id="coupons-error-state" style="display: none;">
+                        <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                        <h5>Error loading coupons</h5>
+                        <p class="text-muted" id="coupons-error-message">Something went wrong.</p>
+                        <button class="btn btn-primary" onclick="loadCoupons()">
+                            <i class="fas fa-redo me-2"></i>Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center" id="coupons-pagination">
+                    <!-- Pagination will be generated here -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Create/Edit Coupon Modal -->
+    <div class="modal fade" id="coupon-modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="coupon-modal-title">Create New Coupon</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="coupon-form">
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="coupon-code" class="form-label">Coupon Code *</label>
+                                    <input type="text" class="form-control" id="coupon-code" required 
+                                           placeholder="e.g., SAVE10" style="text-transform: uppercase;">
+                                    <div class="form-text">Use uppercase letters and numbers only</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="coupon-name" class="form-label">Coupon Name *</label>
+                                    <input type="text" class="form-control" id="coupon-name" required 
+                                           placeholder="e.g., 10% Discount">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="coupon-discount" class="form-label">Discount Percentage *</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="coupon-discount" 
+                                               min="1" max="50" step="0.1" required placeholder="10">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <div class="form-text">Maximum 50% discount allowed</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="coupon-stock" class="form-label">Stock *</label>
+                                    <input type="number" class="form-control" id="coupon-stock" 
+                                           min="1" max="1000" required placeholder="100">
+                                    <div class="form-text">Number of times this coupon can be used</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="coupon-valid-until" class="form-label">Valid Until *</label>
+                                    <input type="datetime-local" class="form-control" id="coupon-valid-until" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="coupon-is-active" class="form-label">Status</label>
+                                    <select class="form-select" id="coupon-is-active">
+                                        <option value="true">Active</option>
+                                        <option value="false">Inactive</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Coupon Preview -->
+                        <div class="alert alert-info" id="coupon-preview">
+                            <h6><i class="fas fa-eye me-2"></i>Coupon Preview</h6>
+                            <div class="coupon-preview-card">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-0" id="preview-code">COUPON CODE</h5>
+                                        <small class="text-muted" id="preview-name">Coupon Name</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <h4 class="mb-0 text-success" id="preview-discount">0%</h4>
+                                        <small class="text-muted">OFF</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success" id="coupon-save-btn">
+                            <i class="fas fa-save me-2"></i>Create Coupon
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coupon Detail Modal -->
+    <div class="modal fade" id="coupon-detail-modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Coupon Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="coupon-detail-content">
+                    <!-- Coupon details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-warning" id="toggle-coupon-status-btn">
+                        <i class="fas fa-toggle-on me-2"></i>Toggle Status
+                    </button>
+                    <button type="button" class="btn btn-primary" id="edit-coupon-btn">
+                        <i class="fas fa-edit me-2"></i>Edit Coupon
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/admin/js/auth.js"></script>
+    <script src="/static/admin/js/coupons.js"></script>
+</body>
+</html>

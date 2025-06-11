@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Cache DOM elements
 function cacheElements() {
     elements = {
-        // Containers
+        // ✅ Main containers
         loadingContainer: document.getElementById('loading-container'),
         moviesGrid: document.getElementById('movies-grid'),
         moviesList: document.getElementById('movies-list'),
@@ -42,78 +42,85 @@ function cacheElements() {
         errorState: document.getElementById('error-state'),
         paginationContainer: document.getElementById('pagination-container'),
         
-        // Stats
-        totalMoviesCount: document.getElementById('total-movies-count'),
-        activeMoviesCount: document.getElementById('active-movies-count'),
-        genresCount: document.getElementById('genres-count'),
-        avgRating: document.getElementById('avg-rating'),
+        // ✅ Stats elements
+        totalMoviesCount: document.getElementById('total-movies'),
+        showingStart: document.getElementById('showing-start'),
+        showingEnd: document.getElementById('showing-end'),
         
-        // Filters
+        // ✅ Filter elements
+        searchInput: document.getElementById('search-input'),
         genreFilter: document.getElementById('genre-filter'),
         ratingFilter: document.getElementById('rating-filter'),
-        searchInput: document.getElementById('search-input'),
-        clearSearchBtn: document.getElementById('clear-search'),
-        gridViewBtn: document.getElementById('grid-view'),
-        listViewBtn: document.getElementById('list-view'),
+        sortSelect: document.getElementById('sort-select'),
+        clearFiltersBtn: document.getElementById('clear-filters-btn'),
         
-        // Modals
+        // ✅ View controls
+        gridViewBtn: document.getElementById('grid-view-btn'),
+        listViewBtn: document.getElementById('list-view-btn'),
+        
+        // ✅ Modals
         addMovieModal: document.getElementById('addMovieModal'),
         editMovieModal: document.getElementById('editMovieModal'),
         deleteMovieModal: document.getElementById('deleteMovieModal'),
         
-        // Forms
+        // ✅ Forms
         addMovieForm: document.getElementById('add-movie-form'),
         editMovieForm: document.getElementById('edit-movie-form'),
         
-        // Buttons
+        // ✅ Buttons
         saveMovieBtn: document.getElementById('save-movie'),
         updateMovieBtn: document.getElementById('update-movie'),
         confirmDeleteBtn: document.getElementById('confirm-delete-movie'),
         
-        // Delete modal elements
+        // ✅ Delete modal elements
         deleteMovieTitle: document.getElementById('delete-movie-title'),
         
-        // Pagination
-        paginationControls: document.getElementById('pagination-controls'),
-        showingStart: document.getElementById('showing-start'),
-        showingEnd: document.getElementById('showing-end'),
-        totalMovies: document.getElementById('total-movies'),
-        
-        // Error message
-        errorMessage: document.getElementById('error-message')
+        // ✅ Pagination
+        paginationControls: document.getElementById('pagination-controls')
     };
     
-    console.log('DOM elements cached:', elements);
+    console.log('✅ Elements cached:', Object.keys(elements).length, 'elements found');
 }
 
 // Setup event listeners
 function setupEventListeners() {
-    // View toggles
+    // Search input
+    if (elements.searchInput) {
+        elements.searchInput.addEventListener('input', debounce(handleFilterChange, 300));
+    }
+    
+    // Filter selects
+    if (elements.genreFilter) {
+        elements.genreFilter.addEventListener('change', handleFilterChange);
+    }
+    
+    if (elements.ratingFilter) {
+        elements.ratingFilter.addEventListener('change', handleFilterChange);
+    }
+    
+    if (elements.sortSelect) {
+        elements.sortSelect.addEventListener('change', handleFilterChange);
+    }
+    
+    // View controls
     if (elements.gridViewBtn) {
         elements.gridViewBtn.addEventListener('click', () => switchView('grid'));
     }
+    
     if (elements.listViewBtn) {
         elements.listViewBtn.addEventListener('click', () => switchView('list'));
     }
     
-    // Filters
-    if (elements.genreFilter) {
-        elements.genreFilter.addEventListener('change', handleFilterChange);
-    }
-    if (elements.ratingFilter) {
-        elements.ratingFilter.addEventListener('change', handleRatingFilterChange);
-    }
-    if (elements.searchInput) {
-        elements.searchInput.addEventListener('input', debounce(handleSearchInput, 300));
-    }
-    if (elements.clearSearchBtn) {
-        elements.clearSearchBtn.addEventListener('click', clearSearch);
+    // Clear filters button
+    if (elements.clearFiltersBtn) {
+        elements.clearFiltersBtn.addEventListener('click', clearAllFilters);
     }
     
-    // Form submissions
+    // Form submissions with proper error handling
     if (elements.addMovieForm) {
         elements.addMovieForm.addEventListener('submit', handleSaveMovie);
     }
+    
     if (elements.editMovieForm) {
         elements.editMovieForm.addEventListener('submit', handleUpdateMovie);
     }
@@ -123,43 +130,7 @@ function setupEventListeners() {
         elements.confirmDeleteBtn.addEventListener('click', handleConfirmDelete);
     }
     
-    // Form resets when modals are hidden
-    if (elements.addMovieModal) {
-        elements.addMovieModal.addEventListener('hidden.bs.modal', () => {
-            if (elements.addMovieForm) {
-                elements.addMovieForm.reset();
-                clearFormErrors('add-movie-form');
-            }
-        });
-    }
-    
-    if (elements.editMovieModal) {
-        elements.editMovieModal.addEventListener('hidden.bs.modal', () => {
-            if (elements.editMovieForm) {
-                elements.editMovieForm.reset();
-                clearFormErrors('edit-movie-form');
-            }
-        });
-    }
-    
-    // Sidebar toggle for mobile
-    const toggleSidebar = document.getElementById('toggleSidebar');
-    const closeSidebar = document.getElementById('closeSidebar');
-    const sidebar = document.getElementById('sidebar');
-    
-    if (toggleSidebar) {
-        toggleSidebar.addEventListener('click', () => {
-            sidebar?.classList.toggle('show');
-        });
-    }
-    
-    if (closeSidebar) {
-        closeSidebar.addEventListener('click', () => {
-            sidebar?.classList.remove('show');
-        });
-    }
-    
-    console.log('Event listeners setup completed');
+    console.log('✅ All event listeners setup successfully');
 }
 
 // Load movies from API
@@ -167,6 +138,11 @@ async function loadMovies() {
     try {
         showLoadingState();
         console.log('Loading movies for admin...');
+        
+        // ✅ Check if AdminAuth is available
+        if (typeof AdminAuth === 'undefined' || typeof AdminAuth.getMovies !== 'function') {
+            throw new Error('AdminAuth.getMovies method is not available');
+        }
         
         const movies = await AdminAuth.getMovies();
         console.log('Movies received from API:', movies);
@@ -176,17 +152,17 @@ async function loadMovies() {
             updateStats(movies);
             applyFilters();
             populateGenreFilter();
-            console.log(`Loaded ${movies.length} movies successfully`);
+            console.log(`✅ Loaded ${movies.length} movies successfully`);
         } else {
             allMovies = [];
             filteredMovies = [];
             updateStats([]);
             showEmptyState();
-            console.log('No movies found');
+            console.log('⚠️ No movies found');
         }
     } catch (error) {
-        console.error('Error loading movies:', error);
-        showErrorState('Failed to load movies. Please try again.');
+        console.error('❌ Error loading movies:', error);
+        showErrorState('Failed to load movies: ' + error.message);
     }
 }
 
@@ -503,34 +479,37 @@ function createMovieCard(movie) {
 function createMovieRow(movie) {
     const row = document.createElement('tr');
     
-    const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/60x90/e2e8f0/64748b?text=No+Poster';
+    const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/80x120/e2e8f0/64748b?text=No+Poster';
     const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
-    const releaseDate = movie.releaseDate || movie.release_date;
-    const formattedDate = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'N/A';
-    const description = movie.description ? 
-        (movie.description.length > 50 ? movie.description.substring(0, 50) + '...' : movie.description) : 
-        'No description';
+    const releaseDate = movie.releaseDate || movie.release_date || null;
+    const releaseDateDisplay = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'TBD';
     
     row.innerHTML = `
         <td>
-            <img src="${posterUrl}" alt="${movie.title}" class="movie-thumbnail" 
-                 style="width: 50px; height: 75px; object-fit: cover; border-radius: 4px;"
-                 onerror="this.src='https://via.placeholder.com/60x90/e2e8f0/64748b?text=No+Poster'">
+            <img src="${posterUrl}" alt="${movie.title}" style="width: 50px; height: 75px; object-fit: cover; border-radius: 4px;"
+                 onerror="this.src='https://via.placeholder.com/50x75/e2e8f0/64748b?text=No+Poster'">
         </td>
         <td>
             <div class="fw-semibold">${movie.title}</div>
-            <small class="text-muted">${description}</small>
+            <small class="text-muted">${movie.description ? 
+                (movie.description.length > 50 ? movie.description.substring(0, 50) + '...' : movie.description) 
+                : 'No description'}</small>
         </td>
         <td><span class="badge bg-primary">${movie.genre}</span></td>
-        <td>${movie.duration} min</td>
-        <td>⭐ ${rating}</td>
-        <td>${formattedDate}</td>
+        <td>${movie.duration || 'N/A'} min</td>
         <td>
-            <div class="btn-group" role="group">
-                <button class="btn btn-sm btn-outline-primary" onclick="editMovie(${movie.id})" title="Edit">
+            <div class="d-flex align-items-center">
+                <span class="rating-stars text-warning me-2">★</span>
+                <span>${rating}/10</span>
+            </div>
+        </td>
+        <td>${releaseDateDisplay}</td>
+        <td>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="editMovie(${movie.id})" title="Edit Movie">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="confirmDeleteMovie(${movie.id})" title="Delete">
+                <button type="button" class="btn btn-outline-danger" onclick="confirmDeleteMovie(${movie.id})" title="Delete Movie">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -1046,4 +1025,203 @@ window.loadMovies = loadMovies;
 window.clearAllFilters = clearAllFilters;
 window.logout = logout;
 
-console.log('Admin Movies JS loaded successfully');
+// ✅ TAMBAHKAN: Missing functions yang dipanggil tapi belum didefinisikan
+function hideAllContainers() {
+    if (elements.loadingContainer) elements.loadingContainer.style.display = 'none';
+    if (elements.emptyState) elements.emptyState.style.display = 'none';
+    if (elements.errorState) elements.errorState.style.display = 'none';
+    if (elements.moviesGrid) elements.moviesGrid.style.display = 'none';
+    if (elements.moviesList) elements.moviesList.style.display = 'none';
+    if (elements.paginationContainer) elements.paginationContainer.style.display = 'none';
+}
+
+// ✅ TAMBAHKAN: Create movie row untuk list view
+function createMovieRow(movie) {
+    const row = document.createElement('tr');
+    
+    const posterUrl = movie.posterUrl || movie.poster_url || 'https://via.placeholder.com/80x120/e2e8f0/64748b?text=No+Poster';
+    const rating = movie.rating ? parseFloat(movie.rating).toFixed(1) : 'N/A';
+    const releaseDate = movie.releaseDate || movie.release_date || null;
+    const releaseDateDisplay = releaseDate ? new Date(releaseDate).toLocaleDateString() : 'TBD';
+    
+    row.innerHTML = `
+        <td>
+            <img src="${posterUrl}" alt="${movie.title}" style="width: 50px; height: 75px; object-fit: cover; border-radius: 4px;"
+                 onerror="this.src='https://via.placeholder.com/50x75/e2e8f0/64748b?text=No+Poster'">
+        </td>
+        <td>
+            <div class="fw-semibold">${movie.title}</div>
+            <small class="text-muted">${movie.description ? 
+                (movie.description.length > 50 ? movie.description.substring(0, 50) + '...' : movie.description) 
+                : 'No description'}</small>
+        </td>
+        <td><span class="badge bg-primary">${movie.genre}</span></td>
+        <td>${movie.duration || 'N/A'} min</td>
+        <td>
+            <div class="d-flex align-items-center">
+                <span class="rating-stars text-warning me-2">★</span>
+                <span>${rating}/10</span>
+            </div>
+        </td>
+        <td>${releaseDateDisplay}</td>
+        <td>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="editMovie(${movie.id})" title="Edit Movie">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger" onclick="confirmDeleteMovie(${movie.id})" title="Delete Movie">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </td>
+    `;
+    
+    return row;
+}
+
+// ✅ TAMBAHKAN: Get form data helper
+function getFormData(formId) {
+    const form = document.getElementById(formId);
+    if (!form) return {};
+    
+    const prefix = formId === 'add-movie-form' ? 'movie' : 'edit-movie';
+    
+    return {
+        title: document.getElementById(`${prefix}-title`)?.value?.trim() || '',
+        genre: document.getElementById(`${prefix}-genre`)?.value || '',
+        duration: parseInt(document.getElementById(`${prefix}-duration`)?.value) || 0,
+        rating: parseFloat(document.getElementById(`${prefix}-rating`)?.value) || null,
+        releaseDate: document.getElementById(`${prefix}-release-date`)?.value || null,
+        posterUrl: document.getElementById(`${prefix}-poster-url`)?.value?.trim() || '',
+        description: document.getElementById(`${prefix}-description`)?.value?.trim() || ''
+    };
+}
+
+// ✅ TAMBAHKAN: Validation helper
+function isValidUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+// ✅ TAMBAHKAN: Show field error
+function showFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+        field.classList.add('is-invalid');
+        const feedback = field.parentNode.querySelector('.invalid-feedback');
+        if (feedback) {
+            feedback.textContent = message;
+        }
+    }
+}
+
+// ✅ TAMBAHKAN: Clear form errors
+function clearFormErrors(formId) {
+    const form = document.getElementById(formId);
+    if (form) {
+        form.querySelectorAll('.is-invalid').forEach(field => {
+            field.classList.remove('is-invalid');
+        });
+        form.querySelectorAll('.invalid-feedback').forEach(feedback => {
+            feedback.textContent = '';
+        });
+    }
+}
+
+// ✅ TAMBAHKAN: Set button loading state
+function setButtonLoading(button, loading) {
+    if (!button) return;
+    
+    if (loading) {
+        button.disabled = true;
+        button.dataset.originalText = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+    } else {
+        button.disabled = false;
+        if (button.dataset.originalText) {
+            button.innerHTML = button.dataset.originalText;
+        }
+    }
+}
+
+// ✅ TAMBAHKAN: Show success message
+function showSuccessMessage(message) {
+    if (typeof AdminAuth !== 'undefined' && AdminAuth.showMessage) {
+        AdminAuth.showMessage(message, 'success');
+    } else {
+        alert(message); // Fallback
+    }
+}
+
+// ✅ TAMBAHKAN: Show error message
+function showErrorMessage(message) {
+    if (typeof AdminAuth !== 'undefined' && AdminAuth.showMessage) {
+        AdminAuth.showMessage(message, 'error');
+    } else {
+        alert('Error: ' + message); // Fallback
+    }
+}
+
+// ✅ TAMBAHKAN: Debounce function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// ✅ TAMBAHKAN: Clear all filters function
+function clearAllFilters() {
+    // Reset filters
+    currentFilters = {
+        genre: '',
+        rating: '',
+        search: '',
+        sort: 'title'
+    };
+    
+    // Reset UI
+    if (elements.genreFilter) elements.genreFilter.value = '';
+    if (elements.ratingFilter) elements.ratingFilter.value = '';
+    if (elements.searchInput) elements.searchInput.value = '';
+    if (elements.sortSelect) elements.sortSelect.value = 'title';
+    
+    // Reset pagination
+    currentPage = 1;
+    
+    // Apply filters
+    applyFilters();
+    
+    showSuccessMessage('Filters cleared');
+}
+
+// ✅ PERBAIKI: Update global functions export
+window.editMovie = editMovie;
+window.deleteMovie = deleteMovie;
+window.confirmDeleteMovie = confirmDeleteMovie;
+window.changePage = changePage;
+window.loadMovies = loadMovies;
+window.clearAllFilters = clearAllFilters;
+window.logout = logout;
+
+// ✅ TAMBAHKAN: Missing window functions
+window.showMovieDetail = showMovieDetail || function(movieId) {
+    console.log('Show movie detail:', movieId);
+    alert('Movie detail functionality not implemented yet');
+};
+
+window.handleMovieBooking = handleMovieBooking || function(movieId) {
+    console.log('Handle movie booking:', movieId);
+    alert('Movie booking functionality not implemented yet');
+};
+
+console.log('✅ Admin Movies JS loaded successfully with all missing functions');

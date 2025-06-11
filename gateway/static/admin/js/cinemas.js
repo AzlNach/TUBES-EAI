@@ -21,15 +21,31 @@ let elements = {};
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== ADMIN CINEMAS PAGE INITIALIZATION ===');
+    
     // Check admin authentication
     if (!AdminAuth.isLoggedIn() || !AdminAuth.isAdmin()) {
+        console.error('❌ Admin authentication failed');
         window.location.href = '/admin/login';
         return;
     }
 
-    cacheElements();
-    setupEventListeners();
-    loadAllData();
+    console.log('✅ Admin authentication passed');
+    
+    try {
+        cacheElements();
+        setupEventListeners();
+        
+        // Add small delay to ensure all scripts are loaded
+        setTimeout(() => {
+            loadAllData();
+        }, 100);
+        
+        console.log('✅ Admin cinemas page initialized successfully');
+    } catch (error) {
+        console.error('❌ Error during initialization:', error);
+        showErrorMessage('Failed to initialize page. Please refresh.');
+    }
 });
 
 // Cache DOM elements
@@ -127,35 +143,57 @@ function setupEventListeners() {
 // Load all initial data
 async function loadAllData() {
     try {
+        console.log('=== LOAD ALL DATA START ===');
+        
+        // Check if all required methods exist
+        if (!checkAdminAuthMethods()) {
+            throw new Error('Required AdminAuth methods are missing');
+        }
+        
         await Promise.all([
             loadCinemas(),
             loadMovies()
         ]);
+        
         populateFilters();
+        console.log('✅ All initial data loaded successfully');
     } catch (error) {
-        console.error('Error loading initial data:', error);
-        showErrorMessage('Failed to load initial data');
+        console.error('❌ Error loading initial data:', error);
+        showErrorMessage('Failed to load initial data. Please refresh the page.');
     }
 }
 
 // Load cinemas
 async function loadCinemas() {
     try {
+        console.log('=== LOADING CINEMAS DEBUG START ===');
         showLoadingState('cinemas');
+        
         const cinemas = await AdminAuth.getCinemas();
+        console.log('Raw cinemas response:', cinemas);
         
         if (cinemas && cinemas.length > 0) {
             allCinemas = cinemas;
             filteredCinemas = [...allCinemas];
             renderCinemas();
-            console.log(`Loaded ${cinemas.length} cinemas successfully`);
+            console.log(`✅ Loaded ${cinemas.length} cinemas successfully`);
         } else {
+            console.log('⚠️ No cinemas found');
             allCinemas = [];
             filteredCinemas = [];
             showEmptyState('cinemas');
         }
+        
+        console.log('=== LOADING CINEMAS DEBUG END ===');
     } catch (error) {
-        console.error('Error loading cinemas:', error);
+        console.error('❌ Error loading cinemas:', error);
+        console.error('❌ Error message:', error.message);
+        
+        // Better error handling
+        if (error.message.includes('seat_layout')) {
+            console.error('❌ Field name mismatch detected - this is a schema issue');
+        }
+        
         showErrorState('cinemas', 'Failed to load cinemas');
     }
 }
@@ -163,21 +201,32 @@ async function loadCinemas() {
 // Load auditoriums
 async function loadAuditoriums() {
     try {
+        console.log('=== LOADING AUDITORIUMS DEBUG START ===');
         showLoadingState('auditoriums');
+        
+        if (typeof AdminAuth.getAuditoriums !== 'function') {
+            throw new Error('AdminAuth.getAuditoriums method is not available');
+        }
+        
         const auditoriums = await AdminAuth.getAuditoriums();
+        console.log('Raw auditoriums response:', auditoriums);
         
         if (auditoriums && auditoriums.length > 0) {
             allAuditoriums = auditoriums;
             filteredAuditoriums = [...allAuditoriums];
             renderAuditoriums();
-            console.log(`Loaded ${auditoriums.length} auditoriums successfully`);
+            console.log(`✅ Loaded ${auditoriums.length} auditoriums successfully`);
         } else {
+            console.log('⚠️ No auditoriums found');
             allAuditoriums = [];
             filteredAuditoriums = [];
             showEmptyState('auditoriums');
         }
+        
+        console.log('=== LOADING AUDITORIUMS DEBUG END ===');
     } catch (error) {
-        console.error('Error loading auditoriums:', error);
+        console.error('❌ Error loading auditoriums:', error);
+        console.error('❌ Error message:', error.message);
         showErrorState('auditoriums', 'Failed to load auditoriums');
     }
 }
@@ -185,21 +234,32 @@ async function loadAuditoriums() {
 // Load showtimes
 async function loadShowtimes() {
     try {
+        console.log('=== LOADING SHOWTIMES DEBUG START ===');
         showLoadingState('showtimes');
+        
+        if (typeof AdminAuth.getShowtimes !== 'function') {
+            throw new Error('AdminAuth.getShowtimes method is not available');
+        }
+        
         const showtimes = await AdminAuth.getShowtimes();
+        console.log('Raw showtimes response:', showtimes);
         
         if (showtimes && showtimes.length > 0) {
             allShowtimes = showtimes;
             filteredShowtimes = [...allShowtimes];
             renderShowtimes();
-            console.log(`Loaded ${showtimes.length} showtimes successfully`);
+            console.log(`✅ Loaded ${showtimes.length} showtimes successfully`);
         } else {
+            console.log('⚠️ No showtimes found');
             allShowtimes = [];
             filteredShowtimes = [];
             showEmptyState('showtimes');
         }
+        
+        console.log('=== LOADING SHOWTIMES DEBUG END ===');
     } catch (error) {
-        console.error('Error loading showtimes:', error);
+        console.error('❌ Error loading showtimes:', error);
+        console.error('❌ Error message:', error.message);
         showErrorState('showtimes', 'Failed to load showtimes');
     }
 }
@@ -496,6 +556,62 @@ async function handleCinemaFormSubmit(event) {
     }
 }
 
+// ✅ TAMBAH: Test server connectivity
+async function testServerConnection() {
+    try {
+        console.log('=== TESTING SERVER CONNECTION ===');
+        
+        // Test basic server connectivity
+        const healthResponse = await fetch('/health', { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        console.log('Health check status:', healthResponse.status);
+        console.log('Health check ok:', healthResponse.ok);
+        
+        // Test GraphQL introspection
+        const introspectionQuery = `
+            query IntrospectionQuery {
+                __schema {
+                    types {
+                        name
+                    }
+                }
+            }
+        `;
+        
+        const introspectionResponse = await fetch('/graphql', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('cinema_auth_token')}`
+            },
+            body: JSON.stringify({
+                query: introspectionQuery,
+                variables: {}
+            })
+        });
+        
+        console.log('Introspection status:', introspectionResponse.status);
+        console.log('Introspection ok:', introspectionResponse.ok);
+        
+        const introspectionText = await introspectionResponse.text();
+        console.log('Introspection response:', introspectionText.substring(0, 500));
+        
+        if (!introspectionResponse.ok) {
+            throw new Error(`GraphQL endpoint not accessible: ${introspectionResponse.status}`);
+        }
+        
+        console.log('✅ Server connection test passed');
+        return true;
+    } catch (error) {
+        console.error('❌ Server connection test failed:', error);
+        return false;
+    }
+}
+
+// ✅ FIX: Simplified auditorium form handler
 async function handleAuditoriumFormSubmit(event) {
     event.preventDefault();
     
@@ -505,7 +621,19 @@ async function handleAuditoriumFormSubmit(event) {
         seat_layout: elements.auditoriumSeatLayout.value
     };
     
-    if (!validateAuditoriumData(formData)) return;
+    // ✅ FIX: Simple validation
+    if (!formData.cinema_id || isNaN(formData.cinema_id)) {
+        showErrorMessage('Please select a cinema');
+        return;
+    }
+    if (!formData.name) {
+        showErrorMessage('Auditorium name is required');
+        return;
+    }
+    if (!formData.seat_layout) {
+        showErrorMessage('Please select a seat layout');
+        return;
+    }
     
     elements.auditoriumSaveBtn.disabled = true;
     elements.auditoriumSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
@@ -519,17 +647,28 @@ async function handleAuditoriumFormSubmit(event) {
             result = await AdminAuth.createAuditorium(formData);
         }
         
-        if (result.success) {
+        if (result && result.success) {
             showSuccessMessage(currentEditingId ? 'Auditorium updated successfully!' : 'Auditorium created successfully!');
             closeAuditoriumModal();
             await loadAuditoriums();
-            await loadCinemas(); // Refresh cinemas to update auditorium counts
+            await loadCinemas();
         } else {
-            showErrorMessage(result.message || 'Operation failed');
+            showErrorMessage(result?.message || 'Operation failed');
         }
     } catch (error) {
         console.error('Error saving auditorium:', error);
-        showErrorMessage('An error occurred while saving the auditorium');
+        
+        // ✅ FIX: User-friendly error messages
+        let errorMessage = 'Failed to save auditorium';
+        if (error.message.includes('Network error')) {
+            errorMessage = 'Cannot connect to server. Please check if the server is running.';
+        } else if (error.message.includes('GraphQL error')) {
+            errorMessage = 'Server error: ' + error.message.replace('GraphQL error: ', '');
+        } else if (error.message.includes('Invalid')) {
+            errorMessage = error.message;
+        }
+        
+        showErrorMessage(errorMessage);
     } finally {
         elements.auditoriumSaveBtn.disabled = false;
         elements.auditoriumSaveBtn.textContent = currentEditingId ? 'Update Auditorium' : 'Save Auditorium';
@@ -1119,3 +1258,44 @@ window.filterCinemas = filterCinemas;
 window.logout = logout;
 
 console.log('Admin Cinemas JS loaded successfully');
+
+// ✅ TAMBAH: Method availability checker
+function checkAdminAuthMethods() {
+    console.log('=== CHECKING ADMINAUTH METHODS ===');
+    
+    const requiredMethods = [
+        'getCinemas',
+        'createCinema', 
+        'updateCinema',
+        'deleteCinema',
+        'getAuditoriums',
+        'createAuditorium',
+        'updateAuditorium', 
+        'deleteAuditorium',
+        'getShowtimes',
+        'createShowtime',
+        'updateShowtime',
+        'deleteShowtime',
+        'getMovies'
+    ];
+    
+    const missingMethods = [];
+    
+    requiredMethods.forEach(method => {
+        if (typeof AdminAuth[method] !== 'function') {
+            missingMethods.push(method);
+            console.error(`❌ Missing method: AdminAuth.${method}`);
+        } else {
+            console.log(`✅ Available method: AdminAuth.${method}`);
+        }
+    });
+    
+    if (missingMethods.length > 0) {
+        console.error('❌ Missing AdminAuth methods:', missingMethods);
+        showErrorMessage(`Missing required methods: ${missingMethods.join(', ')}`);
+        return false;
+    }
+    
+    console.log('✅ All AdminAuth methods are available');
+    return true;
+}
