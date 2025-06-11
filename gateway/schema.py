@@ -241,6 +241,32 @@ class SeatStatusType(ObjectType):
     booking_id = Int()
     updated_at = DateTime()
     
+    # Add camelCase resolvers for JavaScript compatibility
+    showtimeId = Int()
+    seatNumber = String()
+    bookingId = Int()
+    updatedAt = DateTime()
+    
+    def resolve_showtimeId(self, info):
+        if isinstance(self, dict):
+            return self.get('showtimeId') or self.get('showtime_id')
+        return getattr(self, 'showtime_id', None)
+    
+    def resolve_seatNumber(self, info):
+        if isinstance(self, dict):
+            return self.get('seatNumber') or self.get('seat_number')
+        return getattr(self, 'seat_number', None)
+    
+    def resolve_bookingId(self, info):
+        if isinstance(self, dict):
+            return self.get('bookingId') or self.get('booking_id')
+        return getattr(self, 'booking_id', None)
+    
+    def resolve_updatedAt(self, info):
+        if isinstance(self, dict):
+            return self.get('updatedAt') or self.get('updated_at')
+        return getattr(self, 'updated_at', None)
+    
 class TicketType(ObjectType):
     id = Int()
     bookingId = Int()        
@@ -436,6 +462,7 @@ class Query(ObjectType):
     movies = List(MovieType)
     cinemas = List(CinemaType)
     auditoriums = List(AuditoriumType, cinema_id=Int())
+    auditorium = Field(AuditoriumType, id=Int(required=True))
     showtimes = List(ShowtimeType, movie_id=Int(), auditorium_id=Int())
     seat_statuses = List(SeatStatusType, showtime_id=Int(required=True))
     
@@ -1485,6 +1512,73 @@ class Query(ObjectType):
         return auditoriums
     
 
+    def resolve_auditorium(self, info, id):
+        """Get single auditorium by ID with seat layout - PUBLIC ACCESS"""
+        query_data = {
+            'query': f'''
+            {{
+                auditorium(id: {id}) {{
+                    id
+                    cinemaId
+                    name
+                    seatLayout
+                    cinema {{
+                        id
+                        name
+                        city
+                    }}
+                }}
+            }}
+            '''
+        }
+        
+        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        
+        response = handle_service_response(result, 'cinema', 'auditorium')
+        if not response['success']:
+            raise Exception(response['error'])
+        
+        auditorium_data = response['data']
+        if not auditorium_data:
+            raise Exception(f"Auditorium with ID {id} not found")
+        
+        # FIXED: Handle double-encoded seatLayout
+        if auditorium_data and 'seatLayout' in auditorium_data:
+            seat_layout = auditorium_data['seatLayout']
+            
+            # Try to decode double-encoded JSON
+            if isinstance(seat_layout, str):
+                try:
+                    # First decode
+                    decoded_once = json.loads(seat_layout)
+                    
+                    # If it's still a string, decode again
+                    if isinstance(decoded_once, str):
+                        auditorium_data['seatLayout'] = json.loads(decoded_once)
+                        print(f"Double-decoded seatLayout: {auditorium_data['seatLayout']}")
+                    else:
+                        auditorium_data['seatLayout'] = decoded_once
+                        print(f"Single-decoded seatLayout: {auditorium_data['seatLayout']}")
+                        
+                except (json.JSONDecodeError, TypeError) as e:
+                    print(f"Error decoding seatLayout: {e}")
+                    # Keep original value if parsing fails
+        
+        # Transform camelCase response to snake_case for gateway types
+        if auditorium_data:
+            # Transform cinemaId to cinema_id
+            if 'cinemaId' in auditorium_data:
+                auditorium_data['cinema_id'] = auditorium_data.pop('cinemaId')
+            
+            # Transform seatLayout to seat_layout (but keep the decoded object)
+            if 'seatLayout' in auditorium_data:
+                auditorium_data['seat_layout'] = auditorium_data.pop('seatLayout')
+        
+        return auditorium_data
+
+    # Add auditorium field to Query class
+    auditorium = Field(AuditoriumType, id=Int(required=True))
+
     def resolve_showtimes(self, info, movie_id=None, auditorium_id=None):
         print(f"resolve_showtimes called with movie_id={movie_id}, auditorium_id={auditorium_id}")
         
@@ -1638,60 +1732,54 @@ class Query(ObjectType):
         return processed_showtimes
     
 
-    def resolve_seat_statuses(self, info,showtime_id):
-        query_data = {
+    def resolve_seat_statuses(self, info, showtime_id):
+        """Get seat statuses for a showtime - PUBLIC ACCESS"""
+        print(f"resolve_seat_statuses called with showtime_id={showtime_id}")
+        
+        # Get seat statuses directly without authentication requirement
+        seat_status_query = {
             'query': f'''
             {{
                 seatStatuses(showtimeId: {showtime_id}) {{
                     id
-                    showtime_id
-                    seat_number
+                    showtimeId
+                    seatNumber
                     status
-                    booking_id
-                    updated_at
+                    bookingId
+                    updatedAt
                 }}
             }}
             '''
         }
         
-        result = make_service_request(SERVICE_URLS['cinema'], query_data, 'cinema')
+        seat_result = make_service_request(SERVICE_URLS['cinema'], seat_status_query, 'cinema')
         
-        response = handle_service_response(result, 'cinema', 'seatStatuses')
-        if not response['success']:
-            raise Exception(response['error'])
-        return response['data']
-    
-    @require_auth
-    def resolve_user(self, info, current_user, id):
-        """Get single user by ID - users can only see their own profile, admins can see any"""
-        # Regular users can only see their own profile
-        if current_user['role'] != 'ADMIN' and current_user['user_id'] != id:
-            raise Exception("You can only view your own profile")
+        if not seat_result:
+            print("Cinema service unavailable for seat statuses")
+            return []
         
-        query_data = {
-            'query': f'''
-            {{
-                user(id: {id}) {{
-                    id
-                    username
-                    email
-                    role
-                }}
-            }}
-            '''
-        }
+        if seat_result.get('errors'):
+            print(f"Seat status errors: {seat_result['errors']}")
+            return []
         
-        result = make_service_request(SERVICE_URLS['user'], query_data, 'user')
+        seat_statuses = seat_result.get('data', {}).get('seatStatuses', [])
         
-        response = handle_service_response(result, 'user', 'user')
-        if not response['success']:
-            raise Exception(response['error'])
+        # Transform seat statuses to include camelCase fields for JavaScript
+        transformed_statuses = []
+        for status in seat_statuses:
+            transformed_status = {
+                'id': status.get('id'),
+                'showtimeId': status.get('showtimeId'),
+                'seatNumber': status.get('seatNumber'),
+                'status': status.get('status'),
+                'bookingId': status.get('bookingId'),
+                'updatedAt': status.get('updatedAt'),
+                # Remove auditorium field as it's not part of SeatStatusType
+            }
+            transformed_statuses.append(transformed_status)
         
-        user_data = response['data']
-        if not user_data:
-            raise Exception(f"User with ID {id} not found")
-        
-        return user_data
+        print(f"Returning {len(transformed_statuses)} seat statuses")
+        return transformed_statuses
 
 # ============================================================================
 # MUTATION RESOLVERS
@@ -2084,28 +2172,78 @@ class CreateBooking(Mutation):
         booking_result = data.get('createBooking', {})
         booking_data = booking_result.get('booking')
         
+        if not booking_result.get('success', False):
+            return CreateBookingResponse(
+                booking=None,
+                success=False,
+                message=booking_result.get('message', 'Booking creation failed')
+            )
+        
+        # Step 6: AUTOMATICALLY create tickets after booking is created
+        if booking_data and booking_data.get('id'):
+            booking_id = booking_data.get('id')
+            print(f"Creating tickets for booking {booking_id} with seats: {seat_numbers}")
+            
+            create_tickets_query = {
+                'query': '''
+                mutation($bookingId: Int!, $seatNumbers: [String!]!) {
+                    createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
+                        tickets {
+                            id
+                            bookingId
+                            seatNumber
+                        }
+                        success
+                        message
+                    }
+                }
+                ''',
+                'variables': {
+                    'bookingId': booking_id,
+                    'seatNumbers': seat_numbers
+                }
+            }
+            
+            tickets_result = make_service_request(SERVICE_URLS['booking'], create_tickets_query, 'booking')
+            print(f"Tickets creation result: {tickets_result}")
+            
+            if tickets_result and not tickets_result.get('errors'):
+                tickets_data = tickets_result.get('data', {}).get('createTickets', {})
+                if tickets_data.get('success'):
+                    tickets = tickets_data.get('tickets', [])
+                    print(f"Successfully created {len(tickets)} tickets")
+                    # Add tickets to booking data
+                    booking_data['tickets'] = tickets
+                else:
+                    print(f"Tickets creation failed: {tickets_data.get('message')}")
+            else:
+                print(f"Tickets creation request failed: {tickets_result}")
+
         # Transform camelCase response to snake_case for gateway BookingType
         if booking_data:
             transformed_booking = {
                 'id': booking_data.get('id'),
-                'user_id': booking_data.get('userId'),  # Transform camelCase to snake_case
-                'showtime_id': booking_data.get('showtimeId'),  # Transform camelCase to snake_case
+                'user_id': booking_data.get('userId'),
+                'showtime_id': booking_data.get('showtimeId'),
                 'status': booking_data.get('status'),
-                'total_price': booking_data.get('totalPrice'),  # Transform camelCase to snake_case
-                'booking_date': booking_data.get('bookingDate'),  # Transform camelCase to snake_case
-                'tickets': booking_data.get('tickets')
+                'total_price': booking_data.get('totalPrice'),
+                'booking_date': booking_data.get('bookingDate'),
+                'tickets': booking_data.get('tickets', [])
             }
+            
+            ticket_count = len(booking_data.get('tickets', []))
+            success_message = f"Booking created successfully! {ticket_count} tickets generated for seats: {', '.join(seat_numbers)}"
             
             return CreateBookingResponse(
                 booking=transformed_booking,
-                success=booking_result.get('success', False),
-                message=booking_result.get('message', 'Booking created successfully')
+                success=True,
+                message=success_message
             )
         
         return CreateBookingResponse(
             booking=None,
-            success=booking_result.get('success', False),
-            message=booking_result.get('message', 'Booking operation completed')
+            success=False,
+            message="Booking created but data not available"
         )
 
 class UpdateBooking(Mutation):
@@ -2464,11 +2602,20 @@ class DeleteBooking(Mutation):
         if current_user['role'] != 'ADMIN' and booking_data['userId'] != current_user['user_id']:
             return DeleteResponse(success=False, message="You can only cancel your own bookings")
         
-        # Step 3: Check if booking can be cancelled (only PENDING or PAID bookings can be cancelled)
         if booking_data['status'] == 'CANCELLED':
-            return DeleteResponse(success=False, message="Booking is already cancelled")
+            return DeleteResponse(
+                success=False,
+                message="Booking is already cancelled"
+            )
         
-        # Step 4: Get seat numbers that need to be released back to AVAILABLE
+        # CRITICAL: Only allow cancellation of PENDING bookings
+        if booking_data['status'] != 'PENDING':
+            return DeleteResponse(
+                success=False,
+                message="Only pending bookings can be cancelled. Once payment is made, cancellation is not allowed."
+            )
+            
+        # Step 3: Get seat numbers that need to be released back to AVAILABLE
         seat_status_query = {
             'query': f'''
             {{
@@ -2489,10 +2636,11 @@ class DeleteBooking(Mutation):
             
             # Find seats that belong to this booking
             for seat_status in seat_statuses:
-                if seat_status.get('bookingId') == id and seat_status.get('status') in ['RESERVED', 'BOOKED']:
+                if (seat_status.get('bookingId') == id and 
+                    seat_status.get('status') in ['RESERVED', 'BOOKED']):
                     seats_to_release.append(seat_status.get('seatNumber'))
         
-        # Step 5: Delete the booking (this will also delete associated tickets)
+        # Step 4: Delete the booking (this will also delete associated tickets)
         query_data = {
             'query': '''
             mutation($id: Int!) {
@@ -2515,12 +2663,10 @@ class DeleteBooking(Mutation):
         
         delete_result = result.get('data', {}).get('deleteBooking', {})
         
-        # Step 6: If booking deletion was successful, release the seats back to AVAILABLE
+        # Step 5: If booking deletion was successful, release the seats back to AVAILABLE
         if delete_result.get('success', False):
-            failed_seat_releases = []
-            
             for seat_number in seats_to_release:
-                seat_update_query = {
+                seat_release_query = {
                     'query': '''
                     mutation($showtimeId: Int!, $seatNumber: String!, $status: String!) {
                         updateSeatStatus(showtimeId: $showtimeId, seatNumber: $seatNumber, status: $status) {
@@ -2536,22 +2682,11 @@ class DeleteBooking(Mutation):
                     }
                 }
                 
-                seat_update_result = make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
-                
-                # Log failed seat releases but don't fail the whole operation
-                if not seat_update_result or seat_update_result.get('errors'):
-                    failed_seat_releases.append(seat_number)
-            
-            # Prepare success message
-            success_message = delete_result.get('message', 'Booking cancelled successfully')
-            if seats_to_release:
-                success_message += f" and {len(seats_to_release)} seats released"
-                if failed_seat_releases:
-                    success_message += f" (failed to release seats: {', '.join(failed_seat_releases)})"
+                make_service_request(SERVICE_URLS['cinema'], seat_release_query, 'cinema')
             
             return DeleteResponse(
                 success=True,
-                message=success_message
+                message=f"Booking cancelled successfully. {len(seats_to_release)} seats have been released and are now available."
             )
         else:
             return DeleteResponse(
@@ -2848,7 +2983,7 @@ class CreatePayment(Mutation):
         print(f"Payment status update result: {status_update_result}")  # Debug log
 
         # Step 7: AUTOMATICALLY update booking status to 'PAID' (system-driven)
-        print(f"Automatically updating booking {bookingId} status to 'PAID'")  # Debug log
+        print(f"Automatically updating booking {bookingId} status to 'PAID'")
         
         booking_update_query = {
             'query': '''
@@ -2870,34 +3005,21 @@ class CreatePayment(Mutation):
         }
         
         booking_update_result = make_service_request(SERVICE_URLS['booking'], booking_update_query, 'booking')
-        print(f"Booking status update result: {booking_update_result}")  # Debug log
+        print(f"Booking status update result: {booking_update_result}")
         
-        # Step 8: Create tickets for reserved seats automatically
+        # Check if booking update was successful
+        if not booking_update_result or booking_update_result.get('errors'):
+            print(f"Failed to update booking status: {booking_update_result}")
+            return CreatePaymentResponse(
+                payment=None,
+                success=False,
+                message="Payment created but failed to update booking status"
+            )
+        
+        # Step 8: Update seat statuses from RESERVED to BOOKED (tickets already exist)
         if reserved_seats:
-            ticket_query = {
-                'query': '''
-                mutation($bookingId: Int!, $seatNumbers: [String!]!) {
-                    createTickets(bookingId: $bookingId, seatNumbers: $seatNumbers) {
-                        tickets {
-                            id
-                            bookingId
-                            seatNumber
-                        }
-                        success
-                        message
-                    }
-                }
-                ''',
-                'variables': {
-                    'bookingId': bookingId,
-                    'seatNumbers': reserved_seats
-                }
-            }
+            print(f"Updating seat statuses from RESERVED to BOOKED for seats: {reserved_seats}")
             
-            ticket_result = make_service_request(SERVICE_URLS['booking'], ticket_query, 'booking')
-            print(f"Ticket creation result: {ticket_result}")  # Debug log
-            
-            # Update seat statuses from RESERVED to BOOKED after creating tickets
             for seat_number in reserved_seats:
                 seat_update_query = {
                     'query': '''
@@ -2916,9 +3038,10 @@ class CreatePayment(Mutation):
                     }
                 }
                 
-                make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
-
-        # Step 9: Transform payment data properly with final status
+                seat_update_result = make_service_request(SERVICE_URLS['cinema'], seat_update_query, 'cinema')
+                print(f"Seat {seat_number} status update result: {seat_update_result}")
+        
+        # Step 9: Transform payment data with success confirmation
         if payment_service_data:
             # Update CreatePayment mutation untuk auto-increment payment count
             try:
@@ -2963,6 +3086,7 @@ class CreatePayment(Mutation):
                 'canBeDeleted': False
             }
             
+
              # ✓ PERBAIKI: Enhanced success message with discount info
             success_message = f"Payment successful! "
             if coupon_success:
@@ -2971,7 +3095,7 @@ class CreatePayment(Mutation):
                 success_message += f"Amount: ${final_amount:.2f}. "
             
             print(f"=== PAYMENT DEBUG END ===")
-            
+       
             return CreatePaymentResponse(
                 payment={
                     'id': payment_data['payment']['id'],
@@ -2979,15 +3103,10 @@ class CreatePayment(Mutation):
                     'status': 'success'
                 },
                 success=True,
+                message=f"Payment successful! Booking confirmed with {len(reserved_seats)} tickets (already generated during booking)."
                 message=success_message
-            )
-        else:
-            return CreatePaymentResponse(
-                payment=None,
-                success=False,
-                message="Payment processing completed but data not available"
-            )
 
+            
 class DeletePayment(Mutation):
     class Arguments:
         id = Int(required=True)
